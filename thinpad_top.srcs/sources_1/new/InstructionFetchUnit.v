@@ -29,27 +29,69 @@ module InstructionFetchUnit(
     output reg [31:0] pc,
     // PC寄 存 器 更 新 相 关 信 号
     input wire NPCsel ,
-    input wire [31:0] NPCaddr,
-    input wire next
+    input wire [31:0] NPCaddr ,
+    output reg valid ,
+//    input wire stall,
+    input wire ready,
+    input wire mem_done
 );
 
-wire[31:0] seq_pc;
-assign seq_pc = pc + 32'h4;
+reg [1:0] state;
+parameter IDLE = 2'b00, IF = 2'b01, DONE = 2'b10;
+
+always @(posedge clk) begin
+    if(rst) begin
+        state <= IF;
+        valid <= 1;
+    end
+    else begin
+        case(state) 
+            IDLE: begin
+//                if(~stall) begin
+//                    valid <= 1;
+//                    state <= IF;
+//                end
+//                else begin
+//                    valid <= 0;
+//                    state <= state;
+//                end
+                valid <= 1;
+                state <= IF;
+            end
+            IF: begin
+                if(ready) begin
+                    valid <= 0;
+                    state <= DONE;
+                end
+                else state <= state;
+            end
+            DONE: begin
+                if(mem_done) state <= IDLE;
+                else state <= DONE;
+            end
+        endcase
+    end
+end
+
+//wire[31:0] seq_pc;
+//assign seq_pc = pc + 32'h4; 
 
 always @(posedge clk) begin
     if(rst) begin
         pc <= 32'h80000000;
     end
     else begin
-        if(next) begin
+        if(state == IDLE) begin
             if(NPCsel) begin
                 pc <= NPCaddr;
             end
             else begin
-                pc <= seq_pc;
+                pc <= pc + 4;
             end
         end
-        else pc <= pc;
+        else begin
+            pc <= pc;
+        end
     end
 end
 

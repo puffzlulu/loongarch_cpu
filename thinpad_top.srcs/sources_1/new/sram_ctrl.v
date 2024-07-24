@@ -27,6 +27,7 @@ module sram_ctrl(
     input wire wen,
     input wire[31:0] data_in,
     output reg[31:0] data_out,
+    output wire busy,
     
     output wire done,
     inout wire[31:0] ram_data_wire,
@@ -48,6 +49,7 @@ assign ram_we_n = ram_we_n_reg;
 
 assign ram_data_wire = data_z ? 32'bz : data_in;
 assign done = (state == DONE);
+assign busy = ~(state == IDLE);
 
 always @(posedge clk or posedge rst) begin
     if(rst) begin
@@ -62,6 +64,8 @@ always @(posedge clk or posedge rst) begin
             IDLE: begin
                 if(~oen) begin
                     state <= READ0;
+//                    ram_oe_n_reg <= 0;
+//                    ram_ce_n_reg <= 0;
                     data_z <= 1;
                 end
                 else if(~wen) begin

@@ -28,22 +28,27 @@ module address_mapping(
 
 //0x80000000-0x803FFFFF - baseram
 //0x80400000-0x807FFFFF - extram
-//0xBFD003F8-0xBFD003FD - uart
+//0xBFD003FC - uart flag
+//0xBFD003F8 - uart data
 
 wire[31:0] ext_address = cpu_address - 24'h400000;
 
 always @(*) begin
-    if(cpu_address[31:28] == 4'hB) begin
+    if(cpu_address == 32'hBFD003FC) begin
+        type <= 2'b11;
+        sram_address <= 20'b0;
+    end
+    else if(cpu_address == 32'hBFD003F8) begin
         type <= 2'b10;
         sram_address <= 20'b0;
     end
     else if(cpu_address[23:22] == 2'b01) begin
-        type <= 2'b01;
-        sram_address <= cpu_address[21:2];
-    end
-    else begin
         type <= 2'b00;
         sram_address <= ext_address[21:2];
+    end
+    else begin
+        type <= 2'b01;
+        sram_address <= cpu_address[21:2];
     end
 end
 

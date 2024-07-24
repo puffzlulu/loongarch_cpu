@@ -16,13 +16,14 @@ module async_transmitter(
 	input wire TxD_start,
 	input wire [7:0] TxD_data,
 	output wire TxD,
-	output wire TxD_busy
+	output wire TxD_busy,
+	output wire TxD_done
 );
 
 // Assert TxD_start for (at least) one clock cycle to start transmission of TxD_data
 // TxD_data is latched so that it doesn't have to stay valid while it is being sent
 
-parameter ClkFrequency = 25000000;	// 25MHz
+parameter ClkFrequency = 10000000;	// 25MHz
 parameter Baud = 115200;
 
 // generate
@@ -40,12 +41,14 @@ BaudTickGen #(ClkFrequency, Baud) tickgen(.clk(clk), .enable(TxD_busy), .tick(Bi
 reg [3:0] TxD_state = 0;
 wire TxD_ready = (TxD_state==0);
 assign TxD_busy = ~TxD_ready;
+assign TxD_done = (TxD_state == 4'b0010) ? 1 : 0;
 
 reg [7:0] TxD_shift = 0;
 always @(posedge clk)
 begin
-	if(TxD_ready & TxD_start)
+	if(TxD_ready & TxD_start) begin
 		TxD_shift <= TxD_data;
+	end
 	else
 	if(TxD_state[3] & BitTick)
 		TxD_shift <= (TxD_shift >> 1);
@@ -77,10 +80,12 @@ module async_receiver(
 	input wire RxD,
 	output reg RxD_data_ready,
 	input wire RxD_clear,
-	output reg [7:0] RxD_data  // data received, valid only (for one clock cycle) when RxD_data_ready is asserted
+	output wire busy,
+	output reg [7:0] RxD_data,  // data received, valid only (for one clock cycle) when RxD_data_ready is asserted
+    output wire RxD_done
 );
 
-parameter ClkFrequency = 25000000; // 25MHz
+parameter ClkFrequency = 10000000; // 25MHz
 parameter Baud = 115200;
 
 parameter Oversampling = 8;  // needs to be a power of 2
@@ -100,8 +105,13 @@ parameter Oversampling = 8;  // needs to be a power of 2
 wire RxD_idle;  // asserted when no data has been received for a while
 reg RxD_endofpacket; // asserted for one clock cycle when a packet has been detected (i.e. RxD_idle is going high)
 
+//initial begin
+//    RxD_data_ready = 1;
+//end
 
 reg [3:0] RxD_state = 0;
+assign RxD_done = (RxD_state == 4'b0010) ? 1 : 0;
+assign busy = ~(RxD_state == 4'b0000);
 
 `ifdef SIMULATION
 wire RxD_bit = RxD;
@@ -140,21 +150,22 @@ wire sampleNow = OversamplingTick && (OversamplingCnt==Oversampling/2-1);
 `endif
 
 // now we can accumulate the RxD bits in a shift-register
-always @(posedge clk)
-case(RxD_state)
-	4'b0000: if(~RxD_bit) RxD_state <= `ifdef SIMULATION 4'b1000 `else 4'b0001 `endif;  // start bit found?
-	4'b0001: if(sampleNow) RxD_state <= 4'b1000;  // sync start bit to sampleNow
-	4'b1000: if(sampleNow) RxD_state <= 4'b1001;  // bit 0
-	4'b1001: if(sampleNow) RxD_state <= 4'b1010;  // bit 1
-	4'b1010: if(sampleNow) RxD_state <= 4'b1011;  // bit 2
-	4'b1011: if(sampleNow) RxD_state <= 4'b1100;  // bit 3
-	4'b1100: if(sampleNow) RxD_state <= 4'b1101;  // bit 4
-	4'b1101: if(sampleNow) RxD_state <= 4'b1110;  // bit 5
-	4'b1110: if(sampleNow) RxD_state <= 4'b1111;  // bit 6
-	4'b1111: if(sampleNow) RxD_state <= 4'b0010;  // bit 7
-	4'b0010: if(sampleNow) RxD_state <= 4'b0000;  // stop bit
-	default: RxD_state <= 4'b0000;
-endcase
+always @(posedge clk) begin
+    case(RxD_state)
+	   4'b0000: if(~RxD_bit) RxD_state <= `ifdef SIMULATION 4'b1000 `else 4'b0001 `endif;  // start bit found?
+	   4'b0001: if(sampleNow) RxD_state <= 4'b1000;  // sync start bit to sampleNow
+	   4'b1000: if(sampleNow) RxD_state <= 4'b1001;  // bit 0
+	   4'b1001: if(sampleNow) RxD_state <= 4'b1010;  // bit 1
+	   4'b1010: if(sampleNow) RxD_state <= 4'b1011;  // bit 2
+	   4'b1011: if(sampleNow) RxD_state <= 4'b1100;  // bit 3
+	   4'b1100: if(sampleNow) RxD_state <= 4'b1101;  // bit 4
+	   4'b1101: if(sampleNow) RxD_state <= 4'b1110;  // bit 5
+	   4'b1110: if(sampleNow) RxD_state <= 4'b1111;  // bit 6
+	   4'b1111: if(sampleNow) RxD_state <= 4'b0010;  // bit 7
+	   4'b0010: if(sampleNow) RxD_state <= 4'b0000;  // stop bit
+	   default: RxD_state <= 4'b0000;
+    endcase
+end
 
 always @(posedge clk)
 if(sampleNow && RxD_state[3]) RxD_data <= {RxD_bit, RxD_data[7:1]};

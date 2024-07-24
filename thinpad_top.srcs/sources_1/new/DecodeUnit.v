@@ -47,7 +47,7 @@ module DecodeUnit(
     output reg NPCsel ,
     output reg [31:0] NPCaddr ,
     output reg [3:0] sram_be_n ,
-    output wire is_branch
+    output wire gr_we
 );
 
 //此模块需要完成的工作是：
@@ -64,7 +64,6 @@ wire        src1_is_pc;
 wire        src2_is_imm;
 wire        res_from_mem;
 wire        dst_is_r1;
-wire        gr_we;
 wire[1:0]   mem_we;
 wire        src_reg_is_rd;
 wire        rj_eq_rd;
@@ -366,7 +365,7 @@ assign br_taken = (   inst_beq  &&  rj_eq_rd
                   );
 assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
-assign is_branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_b;
+//assign is_branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_b;
 
 assign alu_src1 = src1_is_pc  ? pc[31:0] : rj_value;
 assign alu_src2 = src2_is_imm ? imm : rkd_value;
