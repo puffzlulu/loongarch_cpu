@@ -130,7 +130,7 @@ wire ext_uart_avai;
 
 IOControl IOController(
     .clk(clk_10M),
-    .rst(reset_btn),
+    .rst(touch_btn[0]),
     .inst_en          (IFUready   ), //内存已准备好指令
     .inst_ren         (IFUvalid   ), //取指模块想从内存获取数据
     .inst_addr        (pc         ), 
@@ -170,7 +170,7 @@ IOControl IOController(
 
 mycpu_top mycpu(
     .clk(clk_10M),
-    .rst(reset_btn),
+    .rst(touch_btn[0]),
     .inst_en          (IFUready   ), //内存已准备好指令
     .inst_ren         (IFUvalid   ), //取指模块想从内存获取数据
     .inst_addr        (pc         ), 

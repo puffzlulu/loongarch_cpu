@@ -77,8 +77,8 @@ wire [31:0] or_result;
 wire [31:0] xor_result;
 wire [31:0] lui_result;
 wire [31:0] sll_result;
-wire [63:0] sr64_result;
-wire [31:0] sr_result;
+wire [31:0] sra_result;
+wire [31:0] srl_result;
 wire [63:0] multiply_result_unsign;
 wire [63:0] multiply_result_sign;
 wire [31:0] mul_result;
@@ -96,6 +96,8 @@ wire [31:0] adder_b;
 wire        adder_cin;
 wire [31:0] adder_result;
 wire        adder_cout;
+wire [31:0] sub_result;
+wire [31:0] test_sub_result;
 
 assign adder_a   = alu_src1;
 assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2 : alu_src2;  //src1 - src2 rj-rk
@@ -104,6 +106,7 @@ assign {adder_cout, adder_result} = adder_a + adder_b + adder_cin;
 
 // ADD, SUB result
 assign add_sub_result = adder_result;
+assign sub_result = alu_src1 - alu_src2;
 
 // SLT result
 assign slt_result[31:1] = 31'b0;   //rj < rk 1
@@ -135,17 +138,19 @@ assign divu_result = alu_src1 / alu_src2;
 assign modu_result = alu_src1 % alu_src2;
 
 // SLL result
-assign sll_result = alu_src2 << alu_src1[4:0];   //rj << i5
+assign sll_result = alu_src1 << alu_src2[4:0];   //rj << i5
 
 // SRL, SRA result
 assign sr64_result = {{32{op_sra & alu_src2[31]}}, alu_src2[31:0]} >> alu_src1[4:0]; //rj >> i5
 
 //assign sr_result   = sr64_result[30:0];
-assign sr_result   = alu_src1 >>> alu_src2[4:0];
+assign sra_result   = alu_src1 >>> alu_src2[4:0];
+assign srl_result   = alu_src1 >> alu_src2[4:0];
 
 
 // final result mux
-assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
+assign alu_result = ({32{op_add       }} & add_sub_result)
+                  | ({32{op_sub       }} & sub_result)
                   | ({32{op_slt       }} & slt_result)
                   | ({32{op_sltu      }} & sltu_result)
                   | ({32{op_and       }} & and_result)
@@ -154,7 +159,8 @@ assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
                   | ({32{op_xor       }} & xor_result)
                   | ({32{op_lui       }} & lui_result)
                   | ({32{op_sll       }} & sll_result)
-                  | ({32{op_srl|op_sra}} & sr_result)
+                  | ({32{op_sra       }} & sra_result)
+                  | ({32{op_srl       }} & srl_result)
                   | ({32{op_mul       }} & mul_result)
                   | ({32{op_mulh      }} & mulh_result)
                   | ({32{op_mulhu     }} & mulhu_result)
@@ -162,5 +168,6 @@ assign alu_result = ({32{op_add|op_sub}} & add_sub_result)
                   | ({32{op_mod       }} & mod_result)
                   | ({32{op_divu      }} & divu_result)
                   | ({32{op_modu      }} & modu_result);
+assign test_sub_result = ({32{op_sub       }} & sub_result);
 
 endmodule
