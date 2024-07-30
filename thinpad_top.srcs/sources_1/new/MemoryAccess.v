@@ -26,161 +26,126 @@ module MemoryAccess(
     input wire rst,
     // 访 存 控 制 信 号
     input wire [1:0] wr_in , // 访 存 单 元 读/写 控 制 信 号
-    input wire [31:0] addr_in , // 访 存 地 址
+    input wire [31:0] addr_in , // 访 存 地 址 （其 实 是 EXU 输 出）
     input wire [2:0] type ,
+    input wire [3:0] sram_be_n ,
     // 000:一 字 节符号扩展 001:两 字 节符号扩展 010:四 字 节 011:输 出 执 行 单 元 计 算 结 果
     // 100:一字节零扩展     101：两字节零扩展
     // 访 存 数 据 信 号
     input wire [31:0] data_in , // 访 存 单 元 输 入 数 据
     output reg [31:0] data_out ,// 访 存 单 元 输 出 数 据
-    // 存 储 器 控 制 信 号
-    output reg wr_out , // 存 储 器 读/写 控 制 信 号
-    output reg [31:0] addr_out , // 存 储 器 读 写 地 址
-    output wire [2:0] cpu_type ,
-    // 存 储 器 数 据 信 号
-    output wire [31:0] wdata_out , // 存 储 器 写 数 据
-    input wire [31:0] rdata_in, // 存 储 器 读 数 据
-    input wire ready, //存储器读数据有效
-    output reg valid,
-    output reg mem_done,
-    input wire inst_en
-//    input wire inst_ren
-//    input wire gr_we,
-//    output reg rf_we
+    //回 写 单 元 控 制 信 号
+    input wire [4:0] waddr_reg ,
+    input wire gr_we ,
+
+    output reg [4:0] waddr_reg_r,
+    output reg gr_we_r,
+    
+    output   wire [31:0] in1_araddr,
+    output   wire        in1_arvalid,
+    input  wire        in1_arready,
+    input  wire [31:0] in1_rdata,
+    input  wire        in1_rvalid,
+    output   wire        in1_rready,
+    output   wire [31:0] in1_waddr,
+    output   wire [31:0] in1_wdata,
+    output   wire [3:0]  in1_wstrb,
+    output   wire        in1_wvalid,
+    input  wire        in1_wready,
+    
+    input wire EXU_valid,
+    output wire LSU_ready,
+    output wire LSU_valid
 );
 
-// 访 存 单 元 控 制 部 分
-//assign wr_out = wr_in[0];
-assign cpu_type = type;
+reg [1:0] state,next_state;
+parameter IDLE = 3'b00, READ = 3'b01, WRITE = 3'b10, NONE = 3'b11;
 
-// 地 址 对 齐
-//always @(*) begin
-//    case(type)
-//    3'b000: addr_out = addr_in;
-//    3'b001: addr_out = {addr_in[31:1],1'b0};
-//    3'b010: addr_out = {addr_in[31:2],2'b00};
-//    3'b011: addr_out = addr_in;
-//    3'b100: addr_out = addr_in;
-//    3'b101: addr_out = {addr_in[31:1],1'b0};
-//    default: addr_out = addr_in;
-//    endcase
-//end
+always @(posedge clk) begin
+    if(rst) state <= IDLE;
+    else state <= next_state;
+end
 
-assign wdata_out = data_in;
+always @(*) begin
+    case(state)
+        IDLE: next_state = EXU_valid ? (wr_in[1] ? READ : (wr_in[0] ? WRITE : NONE)) : IDLE;
+        READ: next_state = in1_rvalid ? IDLE : READ;
+        WRITE: next_state = in1_wready ? IDLE : WRITE;
+        NONE : next_state = IDLE;
+    endcase
+end
 
-//reg [31:0] mem_data_out;
-//reg flag;
-
-//always @(*) begin
-//    if(~wr_in) data_out = addr_in;
-//    else begin
-//        if(flag) data_out = mem_data_out;
-//    end
-//end
-
-reg [1:0] state;
-parameter IDLE = 2'b00, READ = 2'b01, WRITE = 2'b10, WAIT = 2'b11;
+reg [1:0] wr_in_r;
+reg [2:0] type_r;
+reg [31:0] wdata_r,addr_in_r;
+reg [3:0] sram_be_n_r;
 
 always @(posedge clk) begin
     if(rst) begin
-        valid <= 0;
-        state <= IDLE;
-        mem_done <= 1;
+        wr_in_r <= 2'b0;
+        type_r <= 3'b0;
+        wdata_r <= 32'b0;
+        sram_be_n_r <= 4'b0;
+        waddr_reg_r <= 5'b0;
+        gr_we_r <= 1'b0;
+        addr_in_r <= 32'b0;
     end
-    else begin
-    case(state)
-        IDLE: begin
-            if(wr_in[0]) begin
-                state <= WRITE;
-                mem_done <= 0;
-            end
-            else if(wr_in[1]) begin
-                state <= READ;
-                mem_done <= 0;
-            end
-            else begin
-                state <= state;
-                data_out = addr_in;
-                mem_done <= 1;
-                valid <= 0;
-            end
-            if(wr_in) begin
-                valid <= 1;
-                wr_out = wr_in[0];
-                case(type)
-                    3'b000: addr_out = addr_in;
-                    3'b001: addr_out = {addr_in[31:1],1'b0};
-                    3'b010: addr_out = {addr_in[31:2],2'b00};
-                    3'b011: addr_out = addr_in;
-                    3'b100: addr_out = addr_in;
-                    3'b101: addr_out = {addr_in[31:1],1'b0};
-                    default: addr_out = addr_in;
-                endcase
-            end
-            else begin
-                addr_out <= 32'b0;
-                valid <= 0;
-            end
+    else if(state == IDLE) begin
+        wr_in_r <= wr_in;
+        type_r <= type;
+        wdata_r <= data_in;
+        sram_be_n_r <= sram_be_n;
+        waddr_reg_r <= waddr_reg;
+        gr_we_r <= gr_we;
+        addr_in_r <= addr_in;
+    end
+end
+
+
+assign in1_arvalid = (state == READ);
+assign in1_rready = (state == READ);
+assign in1_wvalid = (state == WRITE);
+assign LSU_ready = ~(state == IDLE);
+assign LSU_valid = (state == READ)| (state == NONE);
+assign in1_araddr = (state == READ) ? addr_in_r : 32'b0;
+assign in1_waddr = (state == WRITE) ? addr_in_r : 32'b0;
+assign in1_wdata = (state == WRITE) ? wdata_r : 32'b0;
+assign in1_wstrb = (state == WRITE) ? sram_be_n_r : 4'b0;
+
+always @(*) begin
+    case(type_r)
+        3'b000: begin
+            case(addr_in[1:0])
+                2'b00: data_out = {{24{in1_rdata[7]}},in1_rdata[7:0]};
+                2'b01: data_out = {{24{in1_rdata[15]}},in1_rdata[15:8]};
+                2'b10: data_out = {{24{in1_rdata[23]}},in1_rdata[23:16]};
+                2'b11: data_out = {{24{in1_rdata[31]}},in1_rdata[31:24]};
+            endcase
         end
-        READ: begin
-            if(ready) begin
-                state <= WAIT;
-                mem_done <= 1;
-                valid <= 0;
-                wr_out <= 0;
-                case(type)
-                    3'b000: begin
-                        case(addr_in[1:0])
-                            2'b00: data_out = {{24{rdata_in[7]}},rdata_in[7:0]};
-                            2'b01: data_out = {{24{rdata_in[15]}},rdata_in[15:8]};
-                            2'b10: data_out = {{24{rdata_in[23]}},rdata_in[23:16]};
-                            2'b11: data_out = {{24{rdata_in[31]}},rdata_in[31:24]};
-                        endcase
-                    end
-                    3'b001: begin
-                        case(addr_in[1])
-                            1'b0: data_out = {{16{rdata_in[15]}},rdata_in[15:0]};
-                            1'b1: data_out = {{16{rdata_in[31]}},rdata_in[31:16]};
-                        endcase
-                    end
-                    3'b010: data_out = rdata_in;
-                    3'b011: data_out = addr_in; // 如 果 是 11， 输 出 ALUresult
-                    3'b100: begin
-                        case(addr_in[1:0])
-                            2'b00: data_out = {24'b0,rdata_in[7:0]};
-                            2'b01: data_out = {24'b0,rdata_in[15:8]};
-                            2'b10: data_out = {24'b0,rdata_in[23:16]};
-                            2'b11: data_out = {24'b0,rdata_in[31:24]};
-                        endcase
-                    end
-                3'b101: begin
-                    case(addr_in[1])
-                        1'b0: data_out = {16'b0,rdata_in[15:0]};
-                        1'b1: data_out = {16'b0,rdata_in[31:16]};
-                    endcase
-                end
-                default: data_out = 32'b0;
-                endcase
-            end
-            else state <= state;
+        3'b001: begin
+            case(addr_in[1])
+                1'b0: data_out = {{16{in1_rdata[15]}},in1_rdata[15:0]};
+                1'b1: data_out = {{16{in1_rdata[31]}},in1_rdata[31:16]};
+            endcase
         end
-        WRITE: begin
-            if(ready) begin
-                wr_out <= 0;
-                mem_done <= 1;
-                valid <= 0;
-                state <= WAIT;
-            end
-            else state <= state;
+        3'b010: data_out = in1_rdata;
+        3'b011: data_out = addr_in_r; // 如 果 是 11， 输 出 ALUresult
+        3'b100: begin
+            case(addr_in[1:0])
+                2'b00: data_out = {24'b0,in1_rdata[7:0]};
+                2'b01: data_out = {24'b0,in1_rdata[15:8]};
+                2'b10: data_out = {24'b0,in1_rdata[23:16]};
+                2'b11: data_out = {24'b0,in1_rdata[31:24]};
+            endcase
         end
-        WAIT: begin
-           /* wr_out <= 0;*/
-            mem_done <= 0;
-            if(inst_en) state <= IDLE;
-            else state <= state;
+        3'b101: begin
+            case(addr_in[1])
+                1'b0: data_out = {16'b0,in1_rdata[15:0]};
+                1'b1: data_out = {16'b0,in1_rdata[31:16]};
+            endcase
         end
+        default: data_out = 32'b0;
     endcase
-    end
 end
 
 endmodule

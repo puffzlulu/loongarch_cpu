@@ -27,71 +27,95 @@ module InstructionFetchUnit(
     input wire rst,
     // PC寄 存 器
     output reg [31:0] pc,
-    // PC寄 存 器 更 新 相 关 信 号
-    input wire NPCsel ,
-    input wire [31:0] NPCaddr ,
-    output reg valid ,
-//    input wire stall,
-    input wire ready,
-    input wire mem_done
+    output wire [31:0] inst,
+    input wire NPCsel,
+    input wire [31:0] NPCaddr,
+    output   wire [31:0] in2_araddr,
+    output   wire        in2_arvalid,
+    input  wire        in2_arready,
+    input  wire [31:0] in2_rdata,
+    input  wire        in2_rvalid,
+    output   wire        in2_rready,
+    output   wire [31:0] in2_waddr,
+    output   wire [31:0] in2_wdata,
+    output   wire [3:0]  in2_wstrb,
+    output   wire        in2_wvalid,
+    input  wire        in2_wready,
+    output wire IF_valid,
+    input wire ID_ready
 );
 
-reg [1:0] state;
-parameter IDLE = 2'b00, IF = 2'b01, DONE = 2'b10;
+assign in2_araddr = pc;
+reg [1:0] state,next_state;
+parameter IDLE = 2'b00,IF = 2'b01,WAIT = 2'b10;
 
 always @(posedge clk) begin
-    if(rst) begin
-        state <= IF;
-        valid <= 1;
-    end
-    else begin
-        case(state) 
-            IDLE: begin
-//                if(~stall) begin
-//                    valid <= 1;
-//                    state <= IF;
-//                end
-//                else begin
-//                    valid <= 0;
-//                    state <= state;
-//                end
-                valid <= 1;
-                state <= IF;
-            end
-            IF: begin
-                if(ready) begin
-                    valid <= 0;
-                    state <= DONE;
-                end
-                else state <= state;
-            end
-            DONE: begin
-                if(mem_done) state <= IDLE;
-                else state <= DONE;
-            end
-        endcase
-    end
+    if(rst) state <= IDLE;
+    else state <= next_state;
 end
 
-//wire[31:0] seq_pc;
-//assign seq_pc = pc + 32'h4; 
+always @(*) begin
+    case(state)
+        IDLE: next_state = in2_arready ? IF : IDLE;
+        IF: next_state = in2_rvalid ? (ID_ready ? IDLE : WAIT) : IF;
+        WAIT: next_state = ID_ready ? IDLE : WAIT;
+    endcase
+end
+
+reg [31:0] inst_r;
+always @(posedge clk) begin
+    if(rst) inst_r <= 32'b0;
+    else if(in2_rvalid) inst_r <= in2_rdata;
+end
+
+//jirl 0 1 0 0 1 1
+//b 0 1 0 1 0 0
+//beq 0 1 0 1 1 0
+//bne 0 1 0 1 1 1
+//bl 0 1 0 1 0 1
+wire B_type;
+assign B_type = (in2_rdata[31:26] == 6'b010011) | (inst_r[31:26] == 6'b010011) |
+                (in2_rdata[31:26] == 6'b010100) | (inst_r[31:26] == 6'b010100) |
+                (in2_rdata[31:26] == 6'b010110) | (inst_r[31:26] == 6'b010110) |
+                (in2_rdata[31:26] == 6'b010111) | (inst_r[31:26] == 6'b010111) |
+                (in2_rdata[31:26] == 6'b010101) | (inst_r[31:26] == 6'b010101) ;
+
+assign in2_arvalid = (state == IDLE);
+assign in2_rready = (state == IF);
+assign in2_waddr = 32'b0;
+assign in2_wdata = 32'b0;
+assign in2_wstrb = 4'b0;
+assign in2_wvalid = 1'b0;
+assign IF_valid = (state == IF) | (state == WAIT);
+assign inst = (state == IF) ? in2_rdata : inst_r;
+
+reg flag1,flag2;
 
 always @(posedge clk) begin
     if(rst) begin
         pc <= 32'h80000000;
+        flag1 = 0;
+        flag2 = 0;
     end
     else begin
-        if(state == IDLE) begin
-            if(NPCsel) begin
-                pc <= NPCaddr;
+        if(in2_arready) begin
+            if(B_type & ~flag1) begin
+                pc <= pc;
+                flag1 <= 1;
             end
             else begin
-                pc <= pc + 4;
+                if(NPCsel & ~flag2) begin
+                    pc <= NPCaddr;
+                    flag2 <= 1;
+                end
+                else begin
+                    pc <= pc + 4;
+                    flag1 <= 0;
+                    flag2 <= 0;
+                end
             end
         end
-        else begin
-            pc <= pc;
-        end
+        else pc <= pc;
     end
 end
 

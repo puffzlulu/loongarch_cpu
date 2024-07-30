@@ -83,8 +83,8 @@ pll_example clock_gen
   // Clock in ports
   .clk_in1(clk_50M),  // 外部时钟输入
   // Clock out ports
-  .clk_out1(clk_10M), // 时钟输出1，频率在IP配置界面中设置 
-  .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置
+  .clk_out1(clk_10M), // 时钟输出1，频率在IP配置界面中设置  
+  .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置  
   // Status and control signals
   .reset(reset_btn), // PLL复位输入
   .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
@@ -116,113 +116,229 @@ end
 //assign ext_ram_oe_n = 1'b1;
 //assign ext_ram_we_n = 1'b1;
 
-wire IFUvalid,LSUvalid;
-wire IFUready,LSUready;
-wire [31:0] pc;
-wire [31:0] inst;
-wire wr,stall;
-wire [3:0] sram_be_n;
-wire [31:0] data_addr;
-wire [31:0] data_wdata;
-wire [31:0] data_rdata;
-wire [7:0] ext_uart_buffer;
-wire ext_uart_avai;
+// 输入端口1 - LSU
+wire [31:0] in1_araddr;
+wire        in1_arvalid;
+wire        in1_arready;
+wire [31:0] in1_rdata;
+wire        in1_rvalid;
+wire        in1_rready;
+wire [31:0] in1_waddr;
+wire [31:0] in1_wdata;
+wire [3:0]  in1_wstrb;
+wire        in1_wvalid;
+wire        in1_wready;
 
-IOControl IOController(
-    .clk(clk_10M),
-    .rst(touch_btn[0]),
-    .inst_en          (IFUready   ), //内存已准备好指令
-    .inst_ren         (IFUvalid   ), //取指模块想从内存获取数据
-    .inst_addr        (pc         ), 
-    .inst_rdata       (inst       ),
-    .stall            (stall      ),
+// 输入端口2 - IFU
+wire [31:0] in2_araddr;
+wire        in2_arvalid;
+wire        in2_arready;
+wire [31:0] in2_rdata;
+wire        in2_rvalid;
+wire        in2_rready;
+wire [31:0] in2_waddr;
+wire [31:0] in2_wdata;
+wire [3:0]  in2_wstrb;
+wire        in2_wvalid;
+wire        in2_wready;
 
-    .data_en          (LSUready   ),//内存已准备好数据
-    .data_wen         (wr         ),//LSU模块是读是写
-    .data_be_n        (sram_be_n  ),
-    .data_ren         (LSUvalid   ),//LSU模块给出信号有效
-    .data_addr        (data_addr  ),
-    .data_wdata       (data_wdata ),
-    .data_rdata       (data_rdata ),
-    
-    //BaseRAM信号
-    .base_ram_data(base_ram_data),  //BaseRAM数据，低8位与CPLD串口控制器共享
-    .base_ram_addr(base_ram_addr), //BaseRAM地址
-    .base_ram_be_n(base_ram_be_n),
-    .base_ram_ce_n(base_ram_ce_n),       //BaseRAM片选，低有效
-    .base_ram_oe_n(base_ram_oe_n),       //BaseRAM读使能，低有效
-    .base_ram_we_n(base_ram_we_n),       //BaseRAM写使能，低有效
-    
-    //ExtRAM信号
-    .ext_ram_data(ext_ram_data),  //ExtRAM数据
-    .ext_ram_addr(ext_ram_addr), //ExtRAM地址
-    .ext_ram_be_n(ext_ram_be_n),
-    .ext_ram_ce_n(ext_ram_ce_n),       //ExtRAM片选，低有效
-    .ext_ram_oe_n(ext_ram_oe_n),       //ExtRAM读使能，低有效
-    .ext_ram_we_n(ext_ram_we_n),       //ExtRAM写使能，低有效
-    
-    //直连串口信号
-    .txd(txd),  //直连串口发送端
-    .rxd(rxd),  //直连串口接收端
-    .ext_uart_buffer(ext_uart_buffer),
-    .ext_uart_avai(ext_uart_avai)
+// 输出端口1 - 指令存储器 baseram
+wire [31:0] out1_araddr;
+wire        out1_arvalid;
+wire        out1_arready;
+wire [31:0] out1_rdata;
+wire        out1_rvalid;
+wire        out1_rready;
+wire [31:0] out1_waddr;
+wire [31:0] out1_wdata;
+wire [3:0]  out1_wstrb;
+wire        out1_wvalid;
+wire        out1_wready;
+
+// 输出端口2 - 数据存储器 extram
+wire [31:0] out2_araddr;
+wire        out2_arvalid;
+wire        out2_arready;
+wire [31:0] out2_rdata;
+wire        out2_rvalid;
+wire        out2_rready;
+wire [31:0] out2_waddr;
+wire [31:0] out2_wdata;
+wire [3:0]  out2_wstrb;
+wire        out2_wvalid;
+wire        out2_wready;
+
+// 输出端口3 - 串口
+wire [31:0] out3_araddr;
+wire        out3_arvalid;
+wire        out3_arready;
+wire [31:0] out3_rdata;
+wire        out3_rvalid;
+wire        out3_rready;
+wire [31:0] out3_waddr;
+wire [31:0] out3_wdata;
+wire [3:0]  out3_wstrb;
+wire        out3_wvalid;
+wire        out3_wready;
+
+IOXbar ioo(
+  .clock(clk_10M),
+  .reset(reset_of_clk10M),
+  // 输入端口1 - LSU
+  .in1_araddr(in1_araddr),
+  .in1_arvalid(in1_arvalid),
+  .in1_arready(in1_arready),
+  .in1_rdata(in1_rdata),
+  .in1_rvalid(in1_rvalid),
+  .in1_rready(in1_rready),
+  .in1_waddr(in1_waddr),
+  .in1_wdata(in1_wdata),
+  .in1_wstrb(in1_wstrb),
+  .in1_wvalid(in1_wvalid),
+  .in1_wready(in1_wready),
+  // 输入端口2 - IFU
+  .in2_araddr(in2_araddr),
+  .in2_arvalid(in2_arvalid),
+  .in2_arready(in2_arready),
+  .in2_rdata(in2_rdata),
+  .in2_rvalid(in2_rvalid),
+  .in2_rready(in2_rready),
+  .in2_waddr(in2_waddr),
+  .in2_wdata(in2_wdata),
+  .in2_wstrb(in2_wstrb),
+  .in2_wvalid(in2_wvalid),
+  .in2_wready(in2_wready),
+  // 输出端口1 - 指令存储器 baseram
+  .out1_araddr(out1_araddr),
+  .out1_arvalid(out1_arvalid),
+  .out1_arready(out1_arready),
+  .out1_rdata(out1_rdata),
+  .out1_rvalid(out1_rvalid),
+  .out1_rready(out1_rready),
+  .out1_waddr(out1_waddr),
+  .out1_wdata(out1_wdata),
+  .out1_wstrb(out1_wstrb),
+  .out1_wvalid(out1_wvalid),
+  .out1_wready(out1_wready),
+  // 输出端口2 - 数据存储器 extram
+  .out2_araddr(out2_araddr),
+  .out2_arvalid(out2_arvalid),
+  .out2_arready(out2_arready),
+  .out2_rdata(out2_rdata),
+  .out2_rvalid(out2_rvalid),
+  .out2_rready(out2_rready),
+  .out2_waddr(out2_waddr),
+  .out2_wdata(out2_wdata),
+  .out2_wstrb(out2_wstrb),
+  .out2_wvalid(out2_wvalid),
+  .out2_wready(out2_wready),
+  // 输出端口3 - 串口
+  .out3_araddr(out3_araddr),
+  .out3_arvalid(out3_arvalid),
+  .out3_arready(out3_arready),
+  .out3_rdata(out3_rdata),
+  .out3_rvalid(out3_rvalid),
+  .out3_rready(out3_rready),
+  .out3_waddr(out3_waddr),
+  .out3_wdata(out3_wdata),
+  .out3_wstrb(out3_wstrb),
+  .out3_wvalid(out3_wvalid),
+  .out3_wready(out3_wready)
+);
+
+wire [19:0] base_ram_araddr,base_ram_waddr;
+assign base_ram_araddr = out1_araddr [21:2];
+assign base_ram_waddr = out1_waddr [21:2];
+assign base_ram_ce_n = 1'b0;
+SRAMController base_ram_ctrl(
+    .clock(clk_10M),
+    .reset(reset_of_clk10M),
+  // 读地址通道
+    .araddr(base_ram_araddr),
+    .arvalid(out1_arvalid),
+    .arready(out1_arready),
+  // 读数据通道
+    .rdata(out1_rdata),
+    .rvalid(out1_rvalid),
+    .rready(out1_rready),
+  // 写地址&写数据通道
+    .waddr(base_ram_waddr),
+    .wdata(out1_wdata),
+    .wstrb(out1_wstrb),
+    .wvalid(out1_wvalid),
+    .wready(out1_wready),
+
+  // 顶层信号
+    .ram_data(base_ram_data),
+    .ram_addr(base_ram_addr),
+    .ram_be_n(base_ram_be_n),
+  // output  wire        ram_ce_n, RAM一直处于片选状态
+    .ram_oe_n(base_ram_oe_n),
+    .ram_we_n(base_ram_we_n)
+);
+
+wire [31:0] araddr,waddr;
+wire [19:0] ext_ram_araddr,ext_ram_waddr;
+assign araddr = out2_araddr - 24'h400000;
+assign waddr = out2_waddr - 24'h400000;
+assign ext_ram_araddr = araddr[21:2];
+assign ext_ram_waddr = waddr[21:2];
+assign ext_ram_ce_n = 1'b0;
+SRAMController ext_ram_ctrl(
+    .clock(clk_10M),
+    .reset(reset_of_clk10M),
+  // 读地址通道
+    .araddr(ext_ram_araddr),
+    .arvalid(out2_arvalid),
+    .arready(out2_arready),
+  // 读数据通道
+    .rdata(out2_rdata),
+    .rvalid(out2_rvalid),
+    .rready(out2_rready),
+  // 写地址&写数据通道
+    .waddr(ext_ram_waddr),
+    .wdata(out2_wdata),
+    .wstrb(out2_wstrb),
+    .wvalid(out2_wvalid),
+    .wready(out2_wready),
+
+  // 顶层信号
+    .ram_data(ext_ram_data),
+    .ram_addr(ext_ram_addr),
+    .ram_be_n(ext_ram_be_n),
+  // output  wire        ram_ce_n, RAM一直处于片选状态
+    .ram_oe_n(ext_ram_oe_n),
+    .ram_we_n(ext_ram_we_n)
 );
 
 mycpu_top mycpu(
-    .clk(clk_10M),
-    .rst(touch_btn[0]),
-    .inst_en          (IFUready   ), //内存已准备好指令
-    .inst_ren         (IFUvalid   ), //取指模块想从内存获取数据
-    .inst_addr        (pc         ), 
-    .inst_rdata       (inst       ),
-    .stall            (stall      ),
-
-    .data_en          (LSUready   ),//内存已准备好数据
-    .data_wen         (wr         ),//LSU模块是读是写
-    .data_be_n        (sram_be_n  ),
-    .data_ren         (LSUvalid   ),//LSU模块给出信号有效
-    .data_addr        (data_addr  ),
-    .data_wdata       (data_wdata ),
-    .data_rdata       (data_rdata )
+  .clock(clk_10M),
+  .reset(reset_of_clk10M),
+  // 输入端口1 - LSU
+  .in1_araddr(in1_araddr),
+  .in1_arvalid(in1_arvalid),
+  .in1_arready(in1_arready),
+  .in1_rdata(in1_rdata),
+  .in1_rvalid(in1_rvalid),
+  .in1_rready(in1_rready),
+  .in1_waddr(in1_waddr),
+  .in1_wdata(in1_wdata),
+  .in1_wstrb(in1_wstrb),
+  .in1_wvalid(in1_wvalid),
+  .in1_wready(in1_wready),
+  // 输入端口2 - IFU
+  .in2_araddr(in2_araddr),
+  .in2_arvalid(in2_arvalid),
+  .in2_arready(in2_arready),
+  .in2_rdata(in2_rdata),
+  .in2_rvalid(in2_rvalid),
+  .in2_rready(in2_rready),
+  .in2_waddr(in2_waddr),
+  .in2_wdata(in2_wdata),
+  .in2_wstrb(in2_wstrb),
+  .in2_wvalid(in2_wvalid),
+  .in2_wready(in2_wready)
 );
-
-//仲裁
-//always @(posedge clk_10M) begin
-//    if(reset_btn) begin
-//        IFUready <= 0;
-//        LSUready <= 0;
-//        inst <= 32'b0;
-//        data_rdata <= 32'b0;
-//    end
-//    else begin
-//        if(IFUvalid) begin
-//            addr <= pc;
-//        end
-//    end
-//end
-
-////仲裁
-//reg [31:0] inst_rdata_reg;
-//reg [31:0] data_rdata_reg;
-//wire is_inst;
-
-//always @ (*) begin
-//    if (reset_btn) begin
-//        inst_rdata_reg <= 32'b0;
-//        data_rdata_reg <= 32'b0;
-//    end
-//    else begin
-//        inst_rdata_reg <= ~is_inst ? inst_rdata_reg 
-//                            : ready ? IO_rdata 
-//                            : inst_rdata_reg;
-//        data_rdata_reg <= is_inst ? data_rdata_reg
-//                            : ready ? IO_rdata
-//                            : data_rdata_reg;
-//    end
-//end
-//assign inst_rdata = inst_rdata_reg;
-//assign data_rdata = data_rdata_reg;
-//assign is_inst = ~data_addr;
 
 // 数码管连接关系示意图，dpy1同理
 // p=dpy0[0] // ---a---
@@ -241,7 +357,7 @@ mycpu_top mycpu(
 
 //reg[15:0] led_bits;
 //assign leds = led_bits;
-assign leds = {data_rdata,ext_uart_buffer};
+//assign leds = {data_rdata,ext_uart_buffer};
 
 //always@(posedge clock_btn or posedge reset_btn) begin
 //    if(reset_btn)begin //复位按下，设置LED为初始值

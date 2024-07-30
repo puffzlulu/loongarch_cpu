@@ -21,11 +21,64 @@
 
 
 module ExecuteUnit(
+  input wire clk,
+  input wire rst,
   input  wire [18:0] alu_op,
   input  wire [31:0] alu_src1,
   input  wire [31:0] alu_src2,
-  output wire [31:0] alu_result
+  output wire [31:0] alu_result,
+  
+  input wire [1:0] wr,
+  input wire [2:0] type,
+  input wire [31:0] wdata,
+  input wire [3:0] sram_be_n,
+  input wire [4:0] waddr,
+  input wire gr_we,
+  
+  output reg [1:0] wr_r,
+  output reg [2:0] type_r,
+  output reg [31:0] wdata_r,
+  output reg [3:0] sram_be_n_r,
+  output reg [4:0] waddr_r,
+  output reg gr_we_r,
+  
+  input wire ID_valid,
+  output wire EXU_ready,
+  output wire EXU_valid,
+  input wire LSU_ready
 );
+
+assign EXU_ready = LSU_ready;
+assign EXU_valid = ID_valid;
+
+reg [18:0] alu_op_r;
+reg [31:0] alu_src1_r;
+reg [31:0] alu_src2_r;
+
+always @(posedge clk) begin
+    if(rst) begin
+        alu_op_r <= 19'b0;
+        alu_src1_r <= 32'b0;
+        alu_src2_r <= 32'b0;
+        wr_r <= 2'b0;
+        type_r <= 3'b0;
+        wdata_r <= 32'b0;
+        sram_be_n_r <= 4'b0;
+        waddr_r <= 5'b0;
+        gr_we_r <= 1'b0;
+    end
+    else if(ID_valid) begin
+        alu_op_r <= alu_op;
+        alu_src1_r <= alu_src1;
+        alu_src2_r <= alu_src2;
+        wr_r <= wr;
+        type_r <= type;
+        wdata_r <= wdata;
+        sram_be_n_r <= sram_be_n;
+        waddr_r <= waddr;
+        gr_we_r <= gr_we;
+    end
+end
 
 wire op_add;   //add operation
 wire op_sub;   //sub operation
@@ -48,25 +101,25 @@ wire op_divu;  //div unsign
 wire op_modu;  //mod unsign
 
 // control code decomposition
-assign op_add  = alu_op[ 0];
-assign op_sub  = alu_op[ 1];
-assign op_slt  = alu_op[ 2];
-assign op_sltu = alu_op[ 3];
-assign op_and  = alu_op[ 4];
-assign op_nor  = alu_op[ 5];
-assign op_or   = alu_op[ 6];
-assign op_xor  = alu_op[ 7];
-assign op_sll  = alu_op[ 8];
-assign op_srl  = alu_op[ 9];
-assign op_sra  = alu_op[10];
-assign op_lui  = alu_op[11];
-assign op_mul  = alu_op[12];
-assign op_mulh = alu_op[13];
-assign op_mulhu= alu_op[14];
-assign op_div  = alu_op[15];
-assign op_mod  = alu_op[16];
-assign op_divu = alu_op[17];
-assign op_modu = alu_op[18];
+assign op_add  = alu_op_r[ 0];
+assign op_sub  = alu_op_r[ 1];
+assign op_slt  = alu_op_r[ 2];
+assign op_sltu = alu_op_r[ 3];
+assign op_and  = alu_op_r[ 4];
+assign op_nor  = alu_op_r[ 5];
+assign op_or   = alu_op_r[ 6];
+assign op_xor  = alu_op_r[ 7];
+assign op_sll  = alu_op_r[ 8];
+assign op_srl  = alu_op_r[ 9];
+assign op_sra  = alu_op_r[10];
+assign op_lui  = alu_op_r[11];
+assign op_mul  = alu_op_r[12];
+assign op_mulh = alu_op_r[13];
+assign op_mulhu= alu_op_r[14];
+assign op_div  = alu_op_r[15];
+assign op_mod  = alu_op_r[16];
+assign op_divu = alu_op_r[17];
+assign op_modu = alu_op_r[18];
 
 wire [31:0] add_sub_result;
 wire [31:0] slt_result;
@@ -99,53 +152,53 @@ wire        adder_cout;
 wire [31:0] sub_result;
 wire [31:0] test_sub_result;
 
-assign adder_a   = alu_src1;
-assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2 : alu_src2;  //src1 - src2 rj-rk
+assign adder_a   = alu_src1_r;
+assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2_r : alu_src2_r;  //src1 - src2 rj-rk
 assign adder_cin = (op_sub | op_slt | op_sltu) ? 1'b1      : 1'b0;
 assign {adder_cout, adder_result} = adder_a + adder_b + adder_cin;
 
 // ADD, SUB result
 assign add_sub_result = adder_result;
-assign sub_result = alu_src1 - alu_src2;
+assign sub_result = alu_src1_r - alu_src2_r;
 
 // SLT result
 assign slt_result[31:1] = 31'b0;   //rj < rk 1
-assign slt_result[0]    = (alu_src1[31] & ~alu_src2[31])
-                        | ((alu_src1[31] ~^ alu_src2[31]) & adder_result[31]);
+assign slt_result[0]    = (alu_src1_r[31] & ~alu_src2_r[31])
+                        | ((alu_src1_r[31] ~^ alu_src2_r[31]) & adder_result[31]);
 
 // SLTU result
 assign sltu_result[31:1] = 31'b0;
 assign sltu_result[0]    = ~adder_cout;
 
 // bitwise operation
-assign and_result = alu_src1 & alu_src2;
-assign or_result  = alu_src1 | alu_src2;
+assign and_result = alu_src1_r & alu_src2_r;
+assign or_result  = alu_src1_r | alu_src2_r;
 assign nor_result = ~or_result;
-assign xor_result = alu_src1 ^ alu_src2;
-assign lui_result = alu_src2;
+assign xor_result = alu_src1_r ^ alu_src2_r;
+assign lui_result = alu_src2_r;
 
 //mul result
-assign multiply_result_unsign = alu_src1 * alu_src2;
-assign multiply_result_sign = $signed(alu_src1) * $signed(alu_src2);
+assign multiply_result_unsign = alu_src1_r * alu_src2_r;
+assign multiply_result_sign = $signed(alu_src1_r) * $signed(alu_src2_r);
 assign mul_result = multiply_result_unsign[31:0];
 assign mulh_result = multiply_result_sign[63:32];
 assign mulhu_result = multiply_result_unsign[63:32];
 
 //div,mod result
-assign div_result = $signed(alu_src1) / $signed(alu_src2);
-assign mod_result = $signed(alu_src1) % $signed(alu_src2);
-assign divu_result = alu_src1 / alu_src2;
-assign modu_result = alu_src1 % alu_src2;
+assign div_result = $signed(alu_src1_r) / $signed(alu_src2_r);
+assign mod_result = $signed(alu_src1_r) % $signed(alu_src2_r);
+assign divu_result = alu_src1_r / alu_src2_r;
+assign modu_result = alu_src1_r % alu_src2_r;
 
 // SLL result
-assign sll_result = alu_src1 << alu_src2[4:0];   //rj << i5
+assign sll_result = alu_src1_r << alu_src2_r[4:0];   //rj << i5
 
 // SRL, SRA result
-assign sr64_result = {{32{op_sra & alu_src2[31]}}, alu_src2[31:0]} >> alu_src1[4:0]; //rj >> i5
+assign sr64_result = {{32{op_sra & alu_src2_r[31]}}, alu_src2_r[31:0]} >> alu_src1_r[4:0]; //rj >> i5
 
 //assign sr_result   = sr64_result[30:0];
-assign sra_result   = alu_src1 >>> alu_src2[4:0];
-assign srl_result   = alu_src1 >> alu_src2[4:0];
+assign sra_result   = alu_src1_r >>> alu_src2_r[4:0];
+assign srl_result   = alu_src1_r >> alu_src2_r[4:0];
 
 
 // final result mux

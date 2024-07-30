@@ -22,6 +22,7 @@
 
 module DecodeUnit(
     input wire clk,
+    input wire rst,
     // 当 前 指 令 地 址
     input wire [31:0] pc,
     // 指 令
@@ -31,24 +32,39 @@ module DecodeUnit(
     input wire [31:0] rdata1 ,
     output wire [4:0] raddr2 ,
     input wire [31:0] rdata2 ,
+    output wire src2_is_imm ,
     // 执 行 单 元 控 制 信 号
-    output reg [18:0] exeopcode , // 执 行 单 元 执 行 码
+    output wire [18:0] exeopcode , // 执 行 单 元 执 行 码
     // 执 行 单 元 数 据 信 号
-    output reg [31:0] operandA ,
-    output reg [31:0] operandB ,
+    output wire [31:0] operandA ,
+    output wire [31:0] operandB ,
     // 访 存 单 元 控 制 信 号
-    output reg[1:0] wr,
-    output reg [2:0] type ,
+    output wire[1:0] wr,
+    output wire [2:0] type ,
     // 访 存 单 元 数 据 信 号
     output wire [31:0] wdata ,
-    // 回 写 单 元 控 制 信 号
-    output reg [4:0] waddr ,
-    // 取 指 单 元 控 制 信 号
-    output reg NPCsel ,
-    output reg [31:0] NPCaddr ,
     output reg [3:0] sram_be_n ,
-    output wire gr_we
+    // 回 写 单 元 控 制 信 号
+    output wire [4:0] waddr ,
+    output wire gr_we ,
+    // 取 指 单 元 控 制 信 号
+    output wire NPCsel ,
+    output wire [31:0] NPCaddr ,
+    
+    input wire IF_valid ,
+    output wire ID_ready ,
+    output wire ID_valid ,
+    input wire EXU_ready
 );
+
+assign ID_ready = EXU_ready;
+assign ID_valid = IF_valid;
+
+reg [31:0] inst_r;
+always @(posedge clk) begin
+    if(rst) inst_r <= 32'b0;
+    else if(IF_valid) inst_r <= inst;
+end
 
 //此模块需要完成的工作是：
 //1.判断exeopcode 为ExecuteUnit模块提供operandA和operandB
@@ -56,26 +72,20 @@ module DecodeUnit(
 //3.确定回写寄存器和回写控制信号，即确定waddr和rf_we
 //4.确定下一条指令，即确定NPCsel和NPCaddr
 
-wire        br_taken;
-wire [31:0] br_target;
-
 wire        load_op;
 wire        src1_is_pc;
-wire        src2_is_imm;
+//wire        src2_is_imm;
 wire        res_from_mem;
 wire        dst_is_r1;
-wire[1:0]   mem_we;
 wire        src_reg_is_rd;
 wire        rj_eq_rd;
 wire        rj_lt_rd_sign;
 wire        rj_lt_rd_unsign;
-wire [4: 0] dest;
 wire [31:0] rj_value;
 wire [31:0] rkd_value;
 wire [31:0] imm;
 wire [31:0] br_offs; 
 wire [31:0] jirl_offs;
-wire[31:0] alu_src1,alu_src2;
 
 wire [ 5:0] op_31_26;
 wire [ 3:0] op_25_22;
@@ -159,19 +169,19 @@ wire        need_si20;
 wire        need_si26;
 wire        src2_is_4;
 
-assign op_31_26  = inst[31:26];
-assign op_25_22  = inst[25:22];
-assign op_21_20  = inst[21:20];
-assign op_19_15  = inst[19:15];
+assign op_31_26  = inst_r[31:26];
+assign op_25_22  = inst_r[25:22];
+assign op_21_20  = inst_r[21:20];
+assign op_19_15  = inst_r[19:15];
 
-assign rd   = inst[ 4: 0];
-assign rj   = inst[ 9: 5];
-assign rk   = inst[14:10];
+assign rd   = inst_r[ 4: 0];
+assign rj   = inst_r[ 9: 5];
+assign rk   = inst_r[14:10];
 
-assign i12  = inst[21:10];
-assign i20  = inst[24: 5];
-assign i16  = inst[25:10];
-assign i26  = {inst[ 9: 0], inst[25:10]};
+assign i12  = inst_r[21:10];
+assign i20  = inst_r[24: 5];
+assign i16  = inst_r[25:10];
+assign i26  = {inst_r[ 9: 0], inst_r[25:10]};
 
 decoder_6_64 u_dec0(.in(op_31_26 ), .out(op_31_26_d ));
 decoder_4_16 u_dec1(.in(op_25_22 ), .out(op_25_22_d ));
@@ -197,10 +207,10 @@ assign inst_b      = op_31_26_d[6'h14];
 assign inst_bl     = op_31_26_d[6'h15];
 assign inst_beq    = op_31_26_d[6'h16];
 assign inst_bne    = op_31_26_d[6'h17];
-assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst[25];
+assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_r[25];
 assign inst_slti        = op_31_26_d[6'h00] & op_25_22_d[4'h8];
 assign inst_sltui       = op_31_26_d[6'h00] & op_25_22_d[4'h9];
-assign inst_pcaddu12i   = op_31_26_d[6'h07] & ~inst[25];
+assign inst_pcaddu12i   = op_31_26_d[6'h07] & ~inst_r[25];
 assign inst_andi        = op_31_26_d[6'h00] & op_25_22_d[4'hd];
 assign inst_ori         = op_31_26_d[6'h00] & op_25_22_d[4'he];
 assign inst_xori        = op_31_26_d[6'h00] & op_25_22_d[4'hf];
@@ -225,45 +235,41 @@ assign inst_st_h        = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
 assign inst_ld_bu       = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
 assign inst_ld_hu       = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 
-reg[31:0] address;
-
-always@(*) begin
-    //1.判断exeopcode 为ExecuteUnit模块提供operandA和operandB
-    exeopcode[0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
+// 000:一 字 节符号扩展 001:两 字 节符号扩展 010:四 字 节 011:输 出 执 行 单 元 计 算 结 果
+// 100:一字节零扩展     101：两字节零扩展
+assign  type = (inst_ld_w | inst_st_w) ? 010 : 
+               (inst_ld_b | inst_st_b) ? 000 :
+               (inst_ld_h | inst_st_h) ? 001 :
+               (inst_ld_bu) ?            100 :
+               (inst_ld_hu) ?            101 : 011;
+               
+assign exeopcode[0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
                     | inst_jirl | inst_bl | inst_pcaddu12i | inst_ld_b
                     | inst_ld_h | inst_st_b | inst_st_h | inst_ld_bu | inst_ld_hu;
-    exeopcode[1] = inst_sub_w;
-    exeopcode[2] = inst_slt | inst_slti;
-    exeopcode[3] = inst_sltu | inst_sltui;
-    exeopcode[4] = inst_and | inst_andi;
-    exeopcode[5] = inst_nor;
-    exeopcode[6] = inst_or | inst_ori;
-    exeopcode[7] = inst_xor | inst_xori;
-    exeopcode[8] = inst_slli_w | inst_sll_w;
-    exeopcode[9] = inst_srli_w | inst_srl_w;
-    exeopcode[10] = inst_srai_w | inst_sra_w;
-    exeopcode[11] = inst_lu12i_w;
-    exeopcode[12] = inst_mul_w;
-    exeopcode[13] = inst_mulh_w;
-    exeopcode[14] = inst_mulh_wu;
-    exeopcode[15] = inst_div_w;
-    exeopcode[16] = inst_mod_w;
-    exeopcode[17] = inst_div_wu;
-    exeopcode[18] = inst_mod_wu;
-    operandA = alu_src1;
-    operandB = alu_src2;
-    
-    //2.判断访存模块是读是写还是无访存，即确定wr和type
-    // 000:一 字 节符号扩展 001:两 字 节符号扩展 010:四 字 节 011:输 出 执 行 单 元 计 算 结 果
-    // 100:一字节零扩展     101：两字节零扩展
-    wr = mem_we;
-    type = (inst_ld_w | inst_st_w) ? 010 : 
-           (inst_ld_b | inst_st_b) ? 000 :
-           (inst_ld_h | inst_st_h) ? 001 :
-           (inst_ld_bu) ?            100 :
-           (inst_ld_hu) ?            101 : 011;
-    
-    address = alu_src1 + alu_src2;
+assign exeopcode[1] = inst_sub_w;
+assign exeopcode[2] = inst_slt | inst_slti;
+assign exeopcode[3] = inst_sltu | inst_sltui;
+assign exeopcode[3] = inst_sltu | inst_sltui;
+assign exeopcode[4] = inst_and | inst_andi;
+assign exeopcode[5] = inst_nor;
+assign exeopcode[6] = inst_or | inst_ori;
+assign exeopcode[7] = inst_xor | inst_xori;
+assign exeopcode[8] = inst_slli_w | inst_sll_w;
+assign exeopcode[9] = inst_srli_w | inst_srl_w;
+assign exeopcode[10] = inst_srai_w | inst_sra_w;
+assign exeopcode[11] = inst_lu12i_w;
+assign exeopcode[12] = inst_mul_w;
+assign exeopcode[13] = inst_mulh_w;
+assign exeopcode[14] = inst_mulh_wu;
+assign exeopcode[15] = inst_div_w;
+assign exeopcode[16] = inst_mod_w;
+assign exeopcode[17] = inst_div_wu;
+assign exeopcode[18] = inst_mod_wu;
+
+wire[31:0] address;
+assign address = operandA + operandB;
+
+always@(*) begin
     case(type)
         3'b000: begin
             case(address[1:0])
@@ -281,14 +287,6 @@ always@(*) begin
         end
         default: sram_be_n = 4'b0000;
     endcase
-    
-    //3.确定回写寄存器和回写控制信号，即确定waddr和rf_we
-    waddr = dest;
-    //rf_we = gr_we;
-    
-    //4.确定下一条指令，即确定NPCsel和NPCaddr
-    NPCsel = br_taken;
-    NPCaddr = br_target;
 end
 
 assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
@@ -303,7 +301,7 @@ assign imm = src2_is_4 ? 32'h4                      :
              need_si20 ? {i20[19:0], 12'b0}         :
              need_ui12 ? {20'b0 , i12[11:0]}        :
 //             need_si26 ? {{4{i26[25]}},i26[25:0],2'b0} : 
-             need_ui5  ? {27'b0,inst[14:10]}        :
+             need_ui5  ? {27'b0,inst_r[14:10]}        :
 /*need_ui5 || need_si12*/{{20{i12[11]}}, i12[11:0]} ;
 
 assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
@@ -340,9 +338,9 @@ assign src2_is_imm   = inst_slli_w |
 assign res_from_mem  = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
 assign dst_is_r1     = inst_bl;
 assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu & ~inst_st_b & ~inst_st_h;
-assign mem_we[0]     = inst_st_w | inst_st_b | inst_st_h;
-assign mem_we[1]     = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
-assign dest          = dst_is_r1 ? 5'd1 : rd;
+assign wr[0]     = inst_st_w | inst_st_b | inst_st_h;
+assign wr[1]     = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
+assign waddr          = dst_is_r1 ? 5'd1 : rd;
 
 assign raddr1 = rj;
 assign raddr2 = src_reg_is_rd ? rd :rk;
@@ -355,7 +353,7 @@ assign wdata = rkd_value;
 assign rj_eq_rd = (rj_value == rkd_value);
 assign rj_lt_rd_sign = ($signed(rj_value) < $signed(rkd_value));
 assign rj_lt_rd_unsign = (rj_value < rkd_value);
-assign br_taken = (   inst_beq  &&  rj_eq_rd
+assign NPCsel = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
                    || inst_blt  && rj_lt_rd_sign
                    || inst_bge  && !rj_lt_rd_sign
@@ -365,11 +363,11 @@ assign br_taken = (   inst_beq  &&  rj_eq_rd
                    || inst_bl
                    || inst_b
                   );
-assign br_target = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
+assign NPCaddr = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
                                                    /*inst_jirl*/ (rj_value + jirl_offs);
 //assign is_branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_b;
 
-assign alu_src1 = src1_is_pc  ? pc[31:0] : rj_value;
-assign alu_src2 = src2_is_imm ? imm : rkd_value;
+assign operandA = src1_is_pc  ? pc[31:0] : rj_value;
+assign operandB = src2_is_imm ? imm : rkd_value;
 
 endmodule
