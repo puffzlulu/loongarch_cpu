@@ -29,12 +29,14 @@ module DecodeUnit(
     input wire [31:0] inst ,
     // 寄 存 器 堆
     output wire [4:0] raddr1 ,
+    input wire busy_in1,
     input wire [31:0] rdata1 ,
     output wire [4:0] raddr2 ,
+    input wire busy_in2,
     input wire [31:0] rdata2 ,
     output wire src2_is_imm ,
     // 执 行 单 元 控 制 信 号
-    output wire [18:0] exeopcode , // 执 行 单 元 执 行 码
+    output wire [13:0] exeopcode , // 执 行 单 元 执 行 码
     // 执 行 单 元 数 据 信 号
     output wire [31:0] operandA ,
     output wire [31:0] operandB ,
@@ -50,6 +52,8 @@ module DecodeUnit(
     // 取 指 单 元 控 制 信 号
     output wire NPCsel ,
     output wire [31:0] NPCaddr ,
+    output reg [31:0] pc_r,
+    output wire src_reg_is_rd,
     
     input wire IF_valid ,
     output wire ID_ready ,
@@ -57,13 +61,25 @@ module DecodeUnit(
     input wire EXU_ready
 );
 
-assign ID_ready = EXU_ready;
-assign ID_valid = IF_valid;
+reg valid;
+wire ID_ready_go;
+assign ID_ready_go = 1'b1;
+assign ID_ready = !valid || (ID_ready_go && EXU_ready);
+assign ID_valid = valid && ID_ready_go;
 
 reg [31:0] inst_r;
 always @(posedge clk) begin
-    if(rst) inst_r <= 32'b0;
-    else if(IF_valid) inst_r <= inst;
+    if(rst) begin
+        inst_r <= 32'b0;
+        pc_r <= 32'b0;
+        valid <= 1'b0;
+    end
+    else if(ID_ready) valid <= IF_valid;
+    if(IF_valid && ID_ready) begin
+        if(NPCsel) inst_r <= 32'b0;
+        else inst_r <= inst;
+        pc_r <= pc;
+    end
 end
 
 //此模块需要完成的工作是：
@@ -77,7 +93,7 @@ wire        src1_is_pc;
 //wire        src2_is_imm;
 wire        res_from_mem;
 wire        dst_is_r1;
-wire        src_reg_is_rd;
+//wire        src_reg_is_rd;
 wire        rj_eq_rd;
 wire        rj_lt_rd_sign;
 wire        rj_lt_rd_unsign;
@@ -116,41 +132,41 @@ wire [31:0] op_19_15_d;
 //wire      inst_rdcntid;
 wire        inst_add_w;
 wire        inst_sub_w;
-wire        inst_slt;
-wire        inst_sltu;
-wire        inst_nor;
+//wire        inst_slt;
+//wire        inst_sltu;
+//wire        inst_nor;
 wire        inst_and;
 wire        inst_or;
 wire        inst_xor;
-wire        inst_slti;
+//wire        inst_slti;
 wire        inst_sltui;
 wire        inst_pcaddu12i;
 wire        inst_andi;
 wire        inst_ori;
-wire        inst_xori;
+//wire        inst_xori;
 wire        inst_mul_w;
 wire        inst_mulh_w;
-wire        inst_mulh_wu;
-wire        inst_div_w;
-wire        inst_mod_w;
-wire        inst_div_wu;
-wire        inst_mod_wu;
-wire        inst_sll_w;
-wire        inst_srl_w;
+//wire        inst_mulh_wu;
+//wire        inst_div_w;
+//wire        inst_mod_w;
+//wire        inst_div_wu;
+//wire        inst_mod_wu;
+//wire        inst_sll_w;
+//wire        inst_srl_w;
 wire        inst_sra_w;
-wire        inst_blt;
-wire        inst_bge;
+//wire        inst_blt;
+//wire        inst_bge;
 wire        inst_bltu;
-wire        inst_bgeu;
+//wire        inst_bgeu;
 wire        inst_ld_b;
-wire        inst_ld_h;
+//wire        inst_ld_h;
 wire        inst_st_b;
-wire        inst_st_h;
-wire        inst_ld_bu;
-wire        inst_ld_hu;
+//wire        inst_st_h;
+//wire        inst_ld_bu;
+//wire        inst_ld_hu;
 wire        inst_slli_w;
 wire        inst_srli_w;
-wire        inst_srai_w;
+//wire        inst_srai_w;
 wire        inst_addi_w;
 wire        inst_ld_w;
 wire        inst_st_w;
@@ -190,15 +206,15 @@ decoder_5_32 u_dec3(.in(op_19_15 ), .out(op_19_15_d ));
 
 assign inst_add_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h00];
 assign inst_sub_w  = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h02];
-assign inst_slt    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h04];
-assign inst_sltu   = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h05];
-assign inst_nor    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h08];
+//assign inst_slt    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h04];
+//assign inst_sltu   = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h05];
+//assign inst_nor    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h08];
 assign inst_and    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h09];
 assign inst_or     = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0a];
 assign inst_xor    = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0b];
 assign inst_slli_w = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h01];
 assign inst_srli_w = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h09];
-assign inst_srai_w = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h11];
+//assign inst_srai_w = op_31_26_d[6'h00] & op_25_22_d[4'h1] & op_21_20_d[2'h0] & op_19_15_d[5'h11];
 assign inst_addi_w = op_31_26_d[6'h00] & op_25_22_d[4'ha];
 assign inst_ld_w   = op_31_26_d[6'h0a] & op_25_22_d[4'h2];
 assign inst_st_w   = op_31_26_d[6'h0a] & op_25_22_d[4'h6];
@@ -208,63 +224,67 @@ assign inst_bl     = op_31_26_d[6'h15];
 assign inst_beq    = op_31_26_d[6'h16];
 assign inst_bne    = op_31_26_d[6'h17];
 assign inst_lu12i_w= op_31_26_d[6'h05] & ~inst_r[25];
-assign inst_slti        = op_31_26_d[6'h00] & op_25_22_d[4'h8];
+//assign inst_slti        = op_31_26_d[6'h00] & op_25_22_d[4'h8];
 assign inst_sltui       = op_31_26_d[6'h00] & op_25_22_d[4'h9];
 assign inst_pcaddu12i   = op_31_26_d[6'h07] & ~inst_r[25];
 assign inst_andi        = op_31_26_d[6'h00] & op_25_22_d[4'hd];
 assign inst_ori         = op_31_26_d[6'h00] & op_25_22_d[4'he];
-assign inst_xori        = op_31_26_d[6'h00] & op_25_22_d[4'hf];
+//assign inst_xori        = op_31_26_d[6'h00] & op_25_22_d[4'hf];
 assign inst_mul_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h18];
 assign inst_mulh_w      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h19];
-assign inst_mulh_wu     = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
-assign inst_div_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h00];
-assign inst_mod_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h01];
-assign inst_div_wu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
-assign inst_mod_wu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h03];
-assign inst_sll_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
-assign inst_srl_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
+//assign inst_mulh_wu     = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h1a];
+//assign inst_div_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h00];
+//assign inst_mod_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h01];
+//assign inst_div_wu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h2] & op_19_15_d[5'h02];
+//assign inst_mod_wu      = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h03];
+//assign inst_sll_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0e];
+//assign inst_srl_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h0f];
 assign inst_sra_w       = op_31_26_d[6'h00] & op_25_22_d[4'h0] & op_21_20_d[2'h1] & op_19_15_d[5'h10];
-assign inst_blt         = op_31_26_d[6'h18];
-assign inst_bge         = op_31_26_d[6'h19];
+//assign inst_blt         = op_31_26_d[6'h18];
+//assign inst_bge         = op_31_26_d[6'h19];
 assign inst_bltu        = op_31_26_d[6'h1a];
-assign inst_bgeu        = op_31_26_d[6'h1b];
+//assign inst_bgeu        = op_31_26_d[6'h1b];
 assign inst_ld_b        = op_31_26_d[6'h0a] & op_25_22_d[4'h0];
-assign inst_ld_h        = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
+//assign inst_ld_h        = op_31_26_d[6'h0a] & op_25_22_d[4'h1];
 assign inst_st_b        = op_31_26_d[6'h0a] & op_25_22_d[4'h4];
-assign inst_st_h        = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
-assign inst_ld_bu       = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
-assign inst_ld_hu       = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
+//assign inst_st_h        = op_31_26_d[6'h0a] & op_25_22_d[4'h5];
+//assign inst_ld_bu       = op_31_26_d[6'h0a] & op_25_22_d[4'h8];
+//assign inst_ld_hu       = op_31_26_d[6'h0a] & op_25_22_d[4'h9];
 
 // 000:一 字 节符号扩展 001:两 字 节符号扩展 010:四 字 节 011:输 出 执 行 单 元 计 算 结 果
 // 100:一字节零扩展     101：两字节零扩展
 assign  type = (inst_ld_w | inst_st_w) ? 010 : 
-               (inst_ld_b | inst_st_b) ? 000 :
-               (inst_ld_h | inst_st_h) ? 001 :
-               (inst_ld_bu) ?            100 :
-               (inst_ld_hu) ?            101 : 011;
+               (inst_ld_b | inst_st_b) ? 000 : 011;
+//               (inst_ld_h | inst_st_h) ? 001 :
+//               (inst_ld_bu) ?            100 :
+//               (inst_ld_hu) ?            101 : 011;
                
 assign exeopcode[0] = inst_add_w | inst_addi_w | inst_ld_w | inst_st_w
-                    | inst_jirl | inst_bl | inst_pcaddu12i | inst_ld_b
-                    | inst_ld_h | inst_st_b | inst_st_h | inst_ld_bu | inst_ld_hu;
+                    | inst_jirl | inst_bl | inst_pcaddu12i | inst_ld_b | inst_st_b ;
+//                    | inst_ld_h | inst_st_b | inst_st_h | inst_ld_bu | inst_ld_hu;
 assign exeopcode[1] = inst_sub_w;
-assign exeopcode[2] = inst_slt | inst_slti;
-assign exeopcode[3] = inst_sltu | inst_sltui;
-assign exeopcode[3] = inst_sltu | inst_sltui;
+//assign exeopcode[2] = inst_slt | inst_slti;
+//assign exeopcode[3] = inst_sltu | inst_sltui;
+assign exeopcode[3] = inst_sltui;
 assign exeopcode[4] = inst_and | inst_andi;
-assign exeopcode[5] = inst_nor;
+//assign exeopcode[5] = inst_nor;
 assign exeopcode[6] = inst_or | inst_ori;
-assign exeopcode[7] = inst_xor | inst_xori;
-assign exeopcode[8] = inst_slli_w | inst_sll_w;
-assign exeopcode[9] = inst_srli_w | inst_srl_w;
-assign exeopcode[10] = inst_srai_w | inst_sra_w;
+//assign exeopcode[7] = inst_xor | inst_xori;
+assign exeopcode[7] = inst_xor;
+//assign exeopcode[8] = inst_slli_w | inst_sll_w;
+assign exeopcode[8] = inst_slli_w;
+//assign exeopcode[9] = inst_srli_w | inst_srl_w;
+assign exeopcode[9] = inst_srli_w;
+//assign exeopcode[10] = inst_srai_w | inst_sra_w;
+assign exeopcode[10] = inst_sra_w;
 assign exeopcode[11] = inst_lu12i_w;
 assign exeopcode[12] = inst_mul_w;
 assign exeopcode[13] = inst_mulh_w;
-assign exeopcode[14] = inst_mulh_wu;
-assign exeopcode[15] = inst_div_w;
-assign exeopcode[16] = inst_mod_w;
-assign exeopcode[17] = inst_div_wu;
-assign exeopcode[18] = inst_mod_wu;
+//assign exeopcode[14] = inst_mulh_wu;
+//assign exeopcode[15] = inst_div_w;
+//assign exeopcode[16] = inst_mod_w;
+//assign exeopcode[17] = inst_div_wu;
+//assign exeopcode[18] = inst_mod_wu;
 
 wire[31:0] address;
 assign address = operandA + operandB;
@@ -289,10 +309,14 @@ always@(*) begin
     endcase
 end
 
-assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
-assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h;
-assign need_ui12  =  inst_andi | inst_ori | inst_xori;
-assign need_si16  =  inst_jirl | inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu;
+//assign need_ui5   =  inst_slli_w | inst_srli_w | inst_srai_w;
+assign need_ui5   =  inst_slli_w | inst_srli_w;
+//assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_slti | inst_sltui | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu | inst_st_b | inst_st_h;
+assign need_si12  =  inst_addi_w | inst_ld_w | inst_st_w | inst_sltui | inst_ld_b | inst_st_b;
+// need_ui12  =  inst_andi | inst_ori | inst_xori;
+assign need_ui12  =  inst_andi | inst_ori;
+//assign need_si16  =  inst_jirl | inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu;
+assign need_si16  =  inst_jirl | inst_beq | inst_bne | inst_bltu;
 assign need_si20  =  inst_lu12i_w | inst_pcaddu12i;
 assign need_si26  =  inst_b | inst_bl;
 assign src2_is_4  =  inst_jirl | inst_bl;
@@ -309,37 +333,56 @@ assign br_offs = need_si26 ? {{ 4{i26[25]}}, i26[25:0], 2'b0} :
 
 assign jirl_offs = {{14{i16[15]}}, i16[15:0], 2'b0};
 
-assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_st_b | inst_st_h;
+//assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_st_b | inst_st_h;
+assign src_reg_is_rd = inst_beq | inst_bne | inst_st_w | inst_bltu | inst_st_b;
 
 assign src1_is_pc    = inst_jirl | inst_bl | inst_pcaddu12i;
 
+//assign src2_is_imm   = inst_slli_w |
+//                       inst_srli_w |
+//                       inst_srai_w |
+//                       inst_addi_w |
+//                       inst_ld_w   |
+//                       inst_st_w   |
+//                       inst_lu12i_w|
+//                       inst_jirl   |
+//                       inst_bl     |
+//                       inst_slti   |
+//                       inst_sltui  |
+//                       inst_andi   |
+//                       inst_ori    |
+//                       inst_xori   |
+//                       inst_ld_b   |
+//                       inst_ld_h   |
+//                       inst_ld_bu  |
+//                       inst_ld_hu  |
+//                       inst_st_b   |
+//                       inst_st_h   |
+//                       inst_pcaddu12i;
 assign src2_is_imm   = inst_slli_w |
                        inst_srli_w |
-                       inst_srai_w |
                        inst_addi_w |
                        inst_ld_w   |
                        inst_st_w   |
                        inst_lu12i_w|
                        inst_jirl   |
                        inst_bl     |
-                       inst_slti   |
                        inst_sltui  |
                        inst_andi   |
                        inst_ori    |
-                       inst_xori   |
                        inst_ld_b   |
-                       inst_ld_h   |
-                       inst_ld_bu  |
-                       inst_ld_hu  |
                        inst_st_b   |
-                       inst_st_h   |
                        inst_pcaddu12i;
 
-assign res_from_mem  = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
+//assign res_from_mem  = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
+assign res_from_mem  = inst_ld_w | inst_ld_b;
 assign dst_is_r1     = inst_bl;
-assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu & ~inst_st_b & ~inst_st_h;
-assign wr[0]     = inst_st_w | inst_st_b | inst_st_h;
-assign wr[1]     = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
+//assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b & ~inst_blt & ~inst_bge & ~inst_bltu & ~inst_bgeu & ~inst_st_b & ~inst_st_h;
+assign gr_we         = ~inst_st_w & ~inst_beq & ~inst_bne & ~inst_b  & ~inst_bltu & ~inst_st_b;
+//assign wr[0]     = inst_st_w | inst_st_b | inst_st_h;
+assign wr[0]     = inst_st_w | inst_st_b;
+//assign wr[1]     = inst_ld_w | inst_ld_b | inst_ld_h | inst_ld_bu | inst_ld_hu;
+assign wr[1]     = inst_ld_w | inst_ld_b;
 assign waddr          = dst_is_r1 ? 5'd1 : rd;
 
 assign raddr1 = rj;
@@ -355,19 +398,21 @@ assign rj_lt_rd_sign = ($signed(rj_value) < $signed(rkd_value));
 assign rj_lt_rd_unsign = (rj_value < rkd_value);
 assign NPCsel = (   inst_beq  &&  rj_eq_rd
                    || inst_bne  && !rj_eq_rd
-                   || inst_blt  && rj_lt_rd_sign
-                   || inst_bge  && !rj_lt_rd_sign
+//                   || inst_blt  && rj_lt_rd_sign
+//                   || inst_bge  && !rj_lt_rd_sign
                    || inst_bltu && rj_lt_rd_unsign
-                   || inst_bgeu && !rj_lt_rd_unsign
+//                   || inst_bgeu && !rj_lt_rd_unsign
                    || inst_jirl
                    || inst_bl
                    || inst_b
-                  );
-assign NPCaddr = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc + br_offs) :
-                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+                  ) && ~busy_in1 && ~busy_in2;
+//assign NPCaddr = (inst_beq || inst_bne || inst_bl || inst_b || inst_blt || inst_bge || inst_bltu || inst_bgeu) ? (pc_r + br_offs) :
+//                                                   /*inst_jirl*/ (rj_value + jirl_offs);
+assign NPCaddr = (inst_beq || inst_bne || inst_bl || inst_b || inst_bltu) ? (pc_r + br_offs) :
+                                                   /*inst_jirl*/ (rj_value + jirl_offs);                                                  
 //assign is_branch = inst_beq | inst_bne | inst_blt | inst_bge | inst_bltu | inst_bgeu | inst_b;
 
-assign operandA = src1_is_pc  ? pc[31:0] : rj_value;
+assign operandA = src1_is_pc  ? pc_r[31:0] : rj_value;
 assign operandB = src2_is_imm ? imm : rkd_value;
 
 endmodule

@@ -25,10 +25,14 @@ module launch(
     input wire rst,
     input wire [4:0] ID_rd,
     input wire [4:0] ID_in1,
+    output wire busy_in1,
     input wire [4:0] ID_in2,
+    output wire busy_in2,
     input wire src2_is_imm,
+    input wire src_reg_is_rd,
     input wire [4:0] WB_waddr,
-    input wire reg_we,
+    input wire reg_we, // 译码阶段的写使能
+    input wire we, // 回写阶段的写使能
     input wire ID_valid,
     output wire IS_ready,
     output wire IS_valid,
@@ -45,15 +49,17 @@ always @(posedge clk) begin
         end
     end
     else begin
-        if(ID_valid & reg_we & (ID_rd != 5'b0) & (ID_rd != ID_in1) & (ID_rd != ID_in2)) busy[ID_rd] <= 1'b1;
-        if(LSU_valid) busy[WB_waddr] <= 1'b0;
+        if(ID_valid & reg_we & (ID_rd != 5'b0) & EXU_ready) busy[ID_rd] <= 1'b1;
+        if(LSU_valid & we) busy[WB_waddr] <= 1'b0;
     end
 end
 
 wire is_busy;
 //assign is_busy = src2_is_imm ? busy[ID_in1] : (busy[ID_in1] | busy[ID_in2]);
-assign is_busy = src2_is_imm ? busy[ID_in1] : (busy[ID_in1] | busy[ID_in2]);
+assign is_busy = src2_is_imm ? (src_reg_is_rd ? (busy[ID_in1] | busy[ID_in2]) : busy[ID_in1]) : (busy[ID_in1] | busy[ID_in2]);
 assign IS_ready = is_busy ? 1'b0 : EXU_ready;
 assign IS_valid = is_busy ? 1'b0 : ID_valid;
+assign busy_in1 = busy[ID_in1];
+assign busy_in2 = busy[ID_in2];
 
 endmodule

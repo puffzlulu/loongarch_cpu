@@ -24,6 +24,8 @@
 module MemoryAccess(
     input wire clk,
     input wire rst,
+    input wire [31:0] pc,
+    output reg [31:0] pc_r,
     // 访 存 控 制 信 号
     input wire [1:0] wr_in , // 访 存 单 元 读/写 控 制 信 号
     input wire [31:0] addr_in , // 访 存 地 址 （其 实 是 EXU 输 出）
@@ -58,8 +60,8 @@ module MemoryAccess(
     output wire LSU_valid
 );
 
-reg [1:0] state,next_state;
-parameter IDLE = 3'b00, READ = 3'b01, WRITE = 3'b10, NONE = 3'b11;
+reg [2:0] state,next_state;
+parameter IDLE = 3'b000, READ = 3'b001, WRITE = 3'b010, NONE = 3'b011, READ_WAIT = 3'b100, WRITE_WAIT = 3'b101;
 
 always @(posedge clk) begin
     if(rst) state <= IDLE;
@@ -70,7 +72,9 @@ always @(*) begin
     case(state)
         IDLE: next_state = EXU_valid ? (wr_in[1] ? READ : (wr_in[0] ? WRITE : NONE)) : IDLE;
         READ: next_state = in1_rvalid ? IDLE : READ;
+//        READ_WAIT: next_state = in1_rvalid ? IDLE : READ_WAIT;
         WRITE: next_state = in1_wready ? IDLE : WRITE;
+//        WRITE_WAIT: next_state = in1_wready ? IDLE : WRITE_WAIT;
         NONE : next_state = IDLE;
     endcase
 end
@@ -89,8 +93,9 @@ always @(posedge clk) begin
         waddr_reg_r <= 5'b0;
         gr_we_r <= 1'b0;
         addr_in_r <= 32'b0;
+        pc_r <= 32'b0;
     end
-    else if(state == IDLE) begin
+    else if(EXU_valid & LSU_ready) begin
         wr_in_r <= wr_in;
         type_r <= type;
         wdata_r <= data_in;
@@ -98,15 +103,16 @@ always @(posedge clk) begin
         waddr_reg_r <= waddr_reg;
         gr_we_r <= gr_we;
         addr_in_r <= addr_in;
+        pc_r <= pc;
     end
 end
-
 
 assign in1_arvalid = (state == READ);
 assign in1_rready = (state == READ);
 assign in1_wvalid = (state == WRITE);
-assign LSU_ready = ~(state == IDLE);
-assign LSU_valid = (state == READ)| (state == NONE);
+//assign LSU_ready = (state == READ) | (state == WRITE) | (state == NONE);
+assign LSU_ready = (state == IDLE);
+assign LSU_valid = (in1_rvalid)| (state == NONE);
 assign in1_araddr = (state == READ) ? addr_in_r : 32'b0;
 assign in1_waddr = (state == WRITE) ? addr_in_r : 32'b0;
 assign in1_wdata = (state == WRITE) ? wdata_r : 32'b0;
@@ -115,7 +121,7 @@ assign in1_wstrb = (state == WRITE) ? sram_be_n_r : 4'b0;
 always @(*) begin
     case(type_r)
         3'b000: begin
-            case(addr_in[1:0])
+            case(addr_in_r[1:0])
                 2'b00: data_out = {{24{in1_rdata[7]}},in1_rdata[7:0]};
                 2'b01: data_out = {{24{in1_rdata[15]}},in1_rdata[15:8]};
                 2'b10: data_out = {{24{in1_rdata[23]}},in1_rdata[23:16]};
@@ -123,7 +129,7 @@ always @(*) begin
             endcase
         end
         3'b001: begin
-            case(addr_in[1])
+            case(addr_in_r[1])
                 1'b0: data_out = {{16{in1_rdata[15]}},in1_rdata[15:0]};
                 1'b1: data_out = {{16{in1_rdata[31]}},in1_rdata[31:16]};
             endcase
@@ -131,7 +137,7 @@ always @(*) begin
         3'b010: data_out = in1_rdata;
         3'b011: data_out = addr_in_r; // 如 果 是 11， 输 出 ALUresult
         3'b100: begin
-            case(addr_in[1:0])
+            case(addr_in_r[1:0])
                 2'b00: data_out = {24'b0,in1_rdata[7:0]};
                 2'b01: data_out = {24'b0,in1_rdata[15:8]};
                 2'b10: data_out = {24'b0,in1_rdata[23:16]};
@@ -139,7 +145,7 @@ always @(*) begin
             endcase
         end
         3'b101: begin
-            case(addr_in[1])
+            case(addr_in_r[1])
                 1'b0: data_out = {16'b0,in1_rdata[15:0]};
                 1'b1: data_out = {16'b0,in1_rdata[31:16]};
             endcase

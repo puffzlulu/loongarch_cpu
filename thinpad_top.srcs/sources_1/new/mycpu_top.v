@@ -52,7 +52,7 @@ module mycpu_top(
 // 各 部 分 连 线
 wire [4:0] raddr1,raddr2;
 wire [31:0] rdata1,rdata2;
-wire [18:0] exeopcode;
+wire [13:0] exeopcode;
 wire [31:0] operandA,operandB;
 wire [1:0] wr; //2'b00无访存形为 2'b01访存写 2'b10访存读
 wire [2:0] type;
@@ -75,6 +75,9 @@ wire [4:0] waddr_reg_r,waddr_reg_rr;
 wire gr_we_r,gr_we_rr;
 wire [31:0] pc,LSU_addr,inst;
 wire src2_is_imm;
+wire [31:0] ID_pc,EXU_pc,LSU_pc,WB_pc;
+wire busy_in1,busy_in2;
+wire src_reg_is_rd;
 
 InstructionFetchUnit InstructionFetchUint(
     .clk(clock),
@@ -97,7 +100,8 @@ InstructionFetchUnit InstructionFetchUint(
     .in2_wready(in2_wready),
     //和ID交互部分
     .IF_valid(IF_valid),
-    .ID_ready(ID_ready)
+    .ID_ready(ID_ready),
+    .ID_valid(ID_valid)
 );
 
 DecodeUnit DecodeUnit(
@@ -106,8 +110,10 @@ DecodeUnit DecodeUnit(
     .pc(pc),
     .inst(inst),
     .raddr1(raddr1),
+    .busy_in1(busy_in1),
     .rdata1(rdata1),
     .raddr2(raddr2),
+    .busy_in2(busy_in2),
     .rdata2(rdata2),
     .src2_is_imm(src2_is_imm),
     .exeopcode(exeopcode), 
@@ -121,6 +127,8 @@ DecodeUnit DecodeUnit(
     .gr_we(gr_we),
     .NPCsel(NPCsel),
     .NPCaddr(NPCaddr),
+    .pc_r(ID_pc),
+    .src_reg_is_rd(src_reg_is_rd),
     .IF_valid(IF_valid),
     .ID_ready(ID_ready),
     .ID_valid(ID_valid),
@@ -132,10 +140,14 @@ launch score_board(
     .rst(reset),
     .ID_rd(waddr_reg),
     .ID_in1(raddr1),
+    .busy_in1(busy_in1),
     .ID_in2(raddr2),
+    .busy_in2(busy_in2),
     .src2_is_imm(src2_is_imm),
+    .src_reg_is_rd(src_reg_is_rd),
     .WB_waddr(waddr_reg_rr),
     .reg_we(gr_we),
+    .we(gr_we_rr),
     .ID_valid(ID_valid),
     .IS_ready(IS_ready),
     .IS_valid(IS_valid),
@@ -161,6 +173,8 @@ regfile Registers(
 ExecuteUnit ExecuteUnit(
     .clk(clock),
     .rst(reset),
+    .pc(ID_pc),
+    .pc_r(EXU_pc),
     .alu_op(exeopcode),
     .alu_src1(operandA),
     .alu_src2(operandB),
@@ -187,6 +201,8 @@ ExecuteUnit ExecuteUnit(
 MemoryAccess MemoryAccess(
     .clk(clock),
     .rst(reset),
+    .pc(EXU_pc),
+    .pc_r(LSU_pc),
     .wr_in(wr_r), 
     .addr_in(ALUresult),
     .type(type_r),

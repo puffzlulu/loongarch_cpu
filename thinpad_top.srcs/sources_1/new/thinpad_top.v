@@ -83,8 +83,8 @@ pll_example clock_gen
   // Clock in ports
   .clk_in1(clk_50M),  // 外部时钟输入
   // Clock out ports
-  .clk_out1(clk_10M), // 时钟输出1，频率在IP配置界面中设置  
-  .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置  
+  .clk_out1(clk_10M), // 时钟输出1，频率在IP配置界面中设置  //30
+  .clk_out2(clk_20M), // 时钟输出2，频率在IP配置界面中设置  //40
   // Status and control signals
   .reset(reset_btn), // PLL复位输入
   .locked(locked)    // PLL锁定指示输出，"1"表示时钟稳定，
@@ -183,7 +183,8 @@ wire        out3_wready;
 
 IOXbar ioo(
   .clock(clk_10M),
-  .reset(reset_of_clk10M),
+  .reset(touch_btn[0]),
+//  .reset(reset_of_clk10M),
   // 输入端口1 - LSU
   .in1_araddr(in1_araddr),
   .in1_arvalid(in1_arvalid),
@@ -252,7 +253,8 @@ assign base_ram_waddr = out1_waddr [21:2];
 assign base_ram_ce_n = 1'b0;
 SRAMController base_ram_ctrl(
     .clock(clk_10M),
-    .reset(reset_of_clk10M),
+    .reset(touch_btn[0]),
+//    .reset(reset_of_clk10M),
   // 读地址通道
     .araddr(base_ram_araddr),
     .arvalid(out1_arvalid),
@@ -286,7 +288,8 @@ assign ext_ram_waddr = waddr[21:2];
 assign ext_ram_ce_n = 1'b0;
 SRAMController ext_ram_ctrl(
     .clock(clk_10M),
-    .reset(reset_of_clk10M),
+    .reset(touch_btn[0]),
+//    .reset(reset_of_clk10M),
   // 读地址通道
     .araddr(ext_ram_araddr),
     .arvalid(out2_arvalid),
@@ -311,9 +314,35 @@ SRAMController ext_ram_ctrl(
     .ram_we_n(ext_ram_we_n)
 );
 
+wire [7:0] ext_uart_buffer;
+UartController uart_ctrl(
+  .clock(clk_10M),
+  .reset(touch_btn[0]),
+//  .reset(reset_of_clk10M),
+  // 读地址通道
+  .araddr(out3_araddr),
+  .arvalid(out3_arvalid),
+  .arready(out3_arready),
+  // 读数据通道
+  .rdata(out3_rdata),
+  .rvalid(out3_rvalid),
+  .rready(out3_rready),
+  // 写地址&写数据通道
+  .waddr(out3_waddr),
+  .wdata(out3_wdata),
+  .wstrb(out3_wstrb),
+  .wvalid(out3_wvalid),
+  .wready(out3_wready),
+  .ext_uart_buffer(ext_uart_buffer),
+  // 顶层信号
+  .txd(txd),
+  .rxd(rxd)
+);
+
 mycpu_top mycpu(
   .clock(clk_10M),
-  .reset(reset_of_clk10M),
+  .reset(touch_btn[0]),
+//  .reset(reset_of_clk10M),
   // 输入端口1 - LSU
   .in1_araddr(in1_araddr),
   .in1_arvalid(in1_arvalid),
@@ -358,6 +387,7 @@ mycpu_top mycpu(
 //reg[15:0] led_bits;
 //assign leds = led_bits;
 //assign leds = {data_rdata,ext_uart_buffer};
+assign leds = {8'b0,ext_uart_buffer};
 
 //always@(posedge clock_btn or posedge reset_btn) begin
 //    if(reset_btn)begin //复位按下，设置LED为初始值

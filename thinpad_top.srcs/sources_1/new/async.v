@@ -23,7 +23,7 @@ module async_transmitter(
 // Assert TxD_start for (at least) one clock cycle to start transmission of TxD_data
 // TxD_data is latched so that it doesn't have to stay valid while it is being sent
 
-parameter ClkFrequency = 10000000;	// 25MHz
+parameter ClkFrequency = 73000000;	// 25MHz
 parameter Baud = 115200;
 
 // generate
@@ -85,7 +85,7 @@ module async_receiver(
     output wire RxD_done
 );
 
-parameter ClkFrequency = 10000000; // 25MHz
+parameter ClkFrequency = 73000000; // 25MHz
 parameter Baud = 115200;
 
 parameter Oversampling = 8;  // needs to be a power of 2

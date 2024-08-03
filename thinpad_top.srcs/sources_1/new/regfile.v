@@ -35,6 +35,7 @@ module regfile(
     input  wire [31:0] wdata,
     input wire LSU_valid
 );
+
 reg [31:0] rf[31:0];
 
 always @(posedge clk) begin

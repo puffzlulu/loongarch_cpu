@@ -23,7 +23,9 @@
 module ExecuteUnit(
   input wire clk,
   input wire rst,
-  input  wire [18:0] alu_op,
+  input wire [31:0] pc,
+  output reg [31:0] pc_r,
+  input  wire [13:0] alu_op,
   input  wire [31:0] alu_src1,
   input  wire [31:0] alu_src2,
   output wire [31:0] alu_result,
@@ -48,8 +50,19 @@ module ExecuteUnit(
   input wire LSU_ready
 );
 
-assign EXU_ready = LSU_ready;
-assign EXU_valid = ID_valid;
+wire op_mul;   //mul result[31:0]
+reg flag;
+
+always @(posedge clk) begin
+    if(rst) flag <= 0;
+    else flag <= op_mul ? 1'b1 : 1'b0;
+end
+
+reg valid;
+wire EXU_ready_go;
+assign EXU_ready_go = op_mul ? flag : 1'b1;
+assign EXU_ready = !valid || (EXU_ready_go && LSU_ready);
+assign EXU_valid = valid && EXU_ready_go;
 
 reg [18:0] alu_op_r;
 reg [31:0] alu_src1_r;
@@ -57,6 +70,7 @@ reg [31:0] alu_src2_r;
 
 always @(posedge clk) begin
     if(rst) begin
+        valid <= 1'b0;
         alu_op_r <= 19'b0;
         alu_src1_r <= 32'b0;
         alu_src2_r <= 32'b0;
@@ -66,8 +80,10 @@ always @(posedge clk) begin
         sram_be_n_r <= 4'b0;
         waddr_r <= 5'b0;
         gr_we_r <= 1'b0;
+        pc_r <= 32'b0;
     end
-    else if(ID_valid) begin
+    else if(EXU_ready) valid <= ID_valid;
+    if(ID_valid & EXU_ready) begin
         alu_op_r <= alu_op;
         alu_src1_r <= alu_src1;
         alu_src2_r <= alu_src2;
@@ -77,6 +93,7 @@ always @(posedge clk) begin
         sram_be_n_r <= sram_be_n;
         waddr_r <= waddr;
         gr_we_r <= gr_we;
+        pc_r <= pc;
     end
 end
 
@@ -92,13 +109,12 @@ wire op_sll;   //logic left shift
 wire op_srl;   //logic right shift
 wire op_sra;   //arithmetic right shift
 wire op_lui;   //Load Upper Immediate
-wire op_mul;   //mul result[31:0]
 wire op_mulh;  //mul result[63:32] sign
-wire op_mulhu; //mul result[63:32] unsign
-wire op_div;   //div operation
-wire op_mod;   //mod operation
-wire op_divu;  //div unsign
-wire op_modu;  //mod unsign
+//wire op_mulhu; //mul result[63:32] unsign
+//wire op_div;   //div operation
+//wire op_mod;   //mod operation
+//wire op_divu;  //div unsign
+//wire op_modu;  //mod unsign
 
 // control code decomposition
 assign op_add  = alu_op_r[ 0];
@@ -115,11 +131,11 @@ assign op_sra  = alu_op_r[10];
 assign op_lui  = alu_op_r[11];
 assign op_mul  = alu_op_r[12];
 assign op_mulh = alu_op_r[13];
-assign op_mulhu= alu_op_r[14];
-assign op_div  = alu_op_r[15];
-assign op_mod  = alu_op_r[16];
-assign op_divu = alu_op_r[17];
-assign op_modu = alu_op_r[18];
+//assign op_mulhu= alu_op_r[14];
+//assign op_div  = alu_op_r[15];
+//assign op_mod  = alu_op_r[16];
+//assign op_divu = alu_op_r[17];
+//assign op_modu = alu_op_r[18];
 
 wire [31:0] add_sub_result;
 wire [31:0] slt_result;
@@ -132,15 +148,15 @@ wire [31:0] lui_result;
 wire [31:0] sll_result;
 wire [31:0] sra_result;
 wire [31:0] srl_result;
-wire [63:0] multiply_result_unsign;
+//wire [63:0] multiply_result_unsign;
 wire [63:0] multiply_result_sign;
 wire [31:0] mul_result;
 wire [31:0] mulh_result; 
-wire [31:0] mulhu_result;
-wire [31:0] div_result;
-wire [31:0] mod_result;
-wire [31:0] divu_result;
-wire [31:0] modu_result;
+//wire [31:0] mulhu_result;
+//wire [31:0] div_result;
+//wire [31:0] mod_result;
+//wire [31:0] divu_result;
+//wire [31:0] modu_result;
 
 
 // 32-bit adder
@@ -150,7 +166,7 @@ wire        adder_cin;
 wire [31:0] adder_result;
 wire        adder_cout;
 wire [31:0] sub_result;
-wire [31:0] test_sub_result;
+//wire [31:0] test_sub_result;
 
 assign adder_a   = alu_src1_r;
 assign adder_b   = (op_sub | op_slt | op_sltu) ? ~alu_src2_r : alu_src2_r;  //src1 - src2 rj-rk
@@ -162,13 +178,15 @@ assign add_sub_result = adder_result;
 assign sub_result = alu_src1_r - alu_src2_r;
 
 // SLT result
-assign slt_result[31:1] = 31'b0;   //rj < rk 1
-assign slt_result[0]    = (alu_src1_r[31] & ~alu_src2_r[31])
-                        | ((alu_src1_r[31] ~^ alu_src2_r[31]) & adder_result[31]);
+//assign slt_result[31:1] = 31'b0;   //rj < rk 1
+//assign slt_result[0]    = (alu_src1_r[31] & ~alu_src2_r[31])
+//                        | ((alu_src1_r[31] ~^ alu_src2_r[31]) & adder_result[31]);
+assign slt_result = $signed(alu_src1_r) < $signed(alu_src2_r) ? 1 : 0;
 
 // SLTU result
-assign sltu_result[31:1] = 31'b0;
-assign sltu_result[0]    = ~adder_cout;
+//assign sltu_result[31:1] = 31'b0;
+//assign sltu_result[0]    = ~adder_cout;
+assign sltu_result = alu_src1_r < alu_src2_r ? 1 : 0 ;
 
 // bitwise operation
 assign and_result = alu_src1_r & alu_src2_r;
@@ -178,49 +196,64 @@ assign xor_result = alu_src1_r ^ alu_src2_r;
 assign lui_result = alu_src2_r;
 
 //mul result
-assign multiply_result_unsign = alu_src1_r * alu_src2_r;
+//assign multiply_result_unsign = alu_src1_r * alu_src2_r;
 assign multiply_result_sign = $signed(alu_src1_r) * $signed(alu_src2_r);
-assign mul_result = multiply_result_unsign[31:0];
+assign mul_result = multiply_result_sign[31:0];
 assign mulh_result = multiply_result_sign[63:32];
-assign mulhu_result = multiply_result_unsign[63:32];
+//assign mulhu_result = multiply_result_unsign[63:32];
 
 //div,mod result
-assign div_result = $signed(alu_src1_r) / $signed(alu_src2_r);
-assign mod_result = $signed(alu_src1_r) % $signed(alu_src2_r);
-assign divu_result = alu_src1_r / alu_src2_r;
-assign modu_result = alu_src1_r % alu_src2_r;
+//assign div_result = $signed(alu_src1_r) / $signed(alu_src2_r);
+//assign mod_result = $signed(alu_src1_r) % $signed(alu_src2_r);
+//assign divu_result = alu_src1_r / alu_src2_r;
+//assign modu_result = alu_src1_r % alu_src2_r;
 
 // SLL result
 assign sll_result = alu_src1_r << alu_src2_r[4:0];   //rj << i5
 
+wire [63:0] sr64_result;
 // SRL, SRA result
-assign sr64_result = {{32{op_sra & alu_src2_r[31]}}, alu_src2_r[31:0]} >> alu_src1_r[4:0]; //rj >> i5
+assign sr64_result = {{32{op_sra & alu_src1_r[31]}}, alu_src1_r[31:0]} >> alu_src2_r[4:0]; //rj >> i5
 
-//assign sr_result   = sr64_result[30:0];
-assign sra_result   = alu_src1_r >>> alu_src2_r[4:0];
+assign sra_result   = sr64_result[31:0];
+//assign sra_result   = alu_src1_r >>> alu_src2_r[4:0];
 assign srl_result   = alu_src1_r >> alu_src2_r[4:0];
 
 
 // final result mux
-assign alu_result = ({32{op_add       }} & add_sub_result)
-                  | ({32{op_sub       }} & sub_result)
-                  | ({32{op_slt       }} & slt_result)
-                  | ({32{op_sltu      }} & sltu_result)
-                  | ({32{op_and       }} & and_result)
-                  | ({32{op_nor       }} & nor_result)
-                  | ({32{op_or        }} & or_result)
-                  | ({32{op_xor       }} & xor_result)
-                  | ({32{op_lui       }} & lui_result)
-                  | ({32{op_sll       }} & sll_result)
-                  | ({32{op_sra       }} & sra_result)
-                  | ({32{op_srl       }} & srl_result)
-                  | ({32{op_mul       }} & mul_result)
-                  | ({32{op_mulh      }} & mulh_result)
-                  | ({32{op_mulhu     }} & mulhu_result)
-                  | ({32{op_div       }} & div_result)
-                  | ({32{op_mod       }} & mod_result)
-                  | ({32{op_divu      }} & divu_result)
-                  | ({32{op_modu      }} & modu_result);
-assign test_sub_result = ({32{op_sub       }} & sub_result);
+//assign alu_result = ({32{op_add       }} & add_sub_result)
+//                  | ({32{op_sub       }} & sub_result)
+//                  | ({32{op_slt       }} & slt_result)
+//                  | ({32{op_sltu      }} & sltu_result)
+//                  | ({32{op_and       }} & and_result)
+//                  | ({32{op_nor       }} & nor_result)
+//                  | ({32{op_or        }} & or_result)
+//                  | ({32{op_xor       }} & xor_result)
+//                  | ({32{op_lui       }} & lui_result)
+//                  | ({32{op_sll       }} & sll_result)
+//                  | ({32{op_sra       }} & sra_result)
+//                  | ({32{op_srl       }} & srl_result)
+//                  | ({32{op_mul       }} & mul_result)
+//                  | ({32{op_mulh      }} & mulh_result);
+assign alu_result =  op_add ? add_sub_result :
+                     op_sub ? sub_result :
+                     op_slt ? slt_result :
+                     op_sltu ? sltu_result :
+                     op_and ? and_result :
+                     op_nor ? nor_result :
+                     op_or ? or_result :
+                     op_xor ? xor_result :
+                     op_lui ? lui_result :
+                     op_sll ? sll_result :
+                     op_sra ? sra_result :
+                     op_srl ? srl_result :
+                     op_mul ? mul_result :
+                     op_mulh ? mulh_result : 32'b0;
+//                  | ({32{op_mulhu     }} & mulhu_result)
+//                  | ({32{op_div       }} & div_result)
+//                  | ({32{op_mod       }} & mod_result)
+//                  | ({32{op_divu      }} & divu_result)
+//                  | ({32{op_modu      }} & modu_result);
+//assign test_sub_result = ({32{op_sub       }} & sub_result)
 
 endmodule
